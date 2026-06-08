@@ -1,0 +1,14 @@
+# Geschäfts-/Kundendaten NICHT veröffentlichen
+*.pdf
+*.stp
+*.step
+N11450_SetupPlan.pdf
+Beispiel 247 tailorsteel*.png
+Screenshot 2026*.png
+
+# lokale Tool-/Editor-Dateien
+.claude/
+__pycache__/
+*.log
+Thumbs.db
+.DS_Store

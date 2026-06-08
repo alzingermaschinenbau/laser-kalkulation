@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alzinger · Laser-Kalkulation</title>
+<meta name="theme-color" content="#c00000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--red:#c00000;--red2:#9d0000;--paper:#f1f1ee;--surface:#fff;--ink:#16181a;--muted:#5e6166;--faint:#9a9aa0;--line:#e4e2db;--line-strong:#d3cfc4;--field:#f7f6f2;--gold:#a28231;--slate:#4e5258;--pos:#15803d;--red-soft:rgba(192,0,0,.08);--sans:'Manrope','Helvetica Neue',Arial,sans-serif;--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-height:1.45;font-size:15px;-webkit-font-smoothing:antialiased;padding-bottom:74px}
+
+/* Topbar */
+.topbar{position:sticky;top:0;z-index:80;background:var(--red);color:#fff}
+.topbar-in{max-width:1120px;margin:0 auto;padding:14px 20px 12px;position:relative}
+.tb-logo{display:flex;align-items:center;justify-content:center;gap:11px}
+.tb-logo .mk{height:34px;width:34px;display:block;border-radius:6px}
+.tb-logo .wm{font-weight:800;font-size:22px;letter-spacing:.12em}
+.tb-div{height:1px;background:rgba(255,255,255,.45);margin:12px 0}
+.tb-row{display:flex;align-items:center;justify-content:space-between}
+.tb-icons{display:flex;gap:20px}
+.tb-icons a{color:#fff;display:inline-flex;cursor:pointer}
+.tb-icons svg{width:24px;height:24px;stroke:#fff;fill:none;stroke-width:1.7}
+.tb-right{display:flex;align-items:center;gap:12px}
+.langsel{display:inline-flex;gap:2px;background:rgba(255,255,255,.16);border-radius:8px;padding:3px}
+.langsel button{background:none;border:0;color:#fff;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.04em;padding:5px 7px;border-radius:6px;cursor:pointer;opacity:.72;transition:.12s}
+.langsel button:hover{opacity:1}
+.langsel button.active{background:#fff;color:var(--red);opacity:1}
+.tb-burger{background:none;border:0;cursor:pointer;padding:4px;display:inline-flex}
+.tb-burger svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:1.7}
+
+/* Hero */
+.hero{position:relative;background:linear-gradient(120deg,#1b1d20 0%,#26292d 48%,#3a2326 100%);color:#fff;overflow:hidden}
+.hero:after{content:"";position:absolute;inset:0;background:radial-gradient(900px 380px at 78% 30%,rgba(192,0,0,.28),transparent 70%);pointer-events:none}
+.hero-in{max-width:1120px;margin:0 auto;width:100%;padding:54px 20px 50px;position:relative;z-index:1}
+.hero .kick{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#e9b8b8}
+.hero h1{font-size:clamp(30px,6vw,48px);font-weight:800;letter-spacing:-.02em;line-height:1.03;margin-top:12px}
+.hero .sub{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#c9c6c0;margin-top:14px}
+.hero .cta{display:inline-flex;align-items:center;gap:9px;margin-top:26px;background:var(--red);color:#fff;border:0;border-radius:9px;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:14px 22px;cursor:pointer;transition:.15s}
+.hero .cta:hover{background:var(--red2)}
+
+/* Layout */
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.modeline{display:flex;justify-content:center;margin:26px 0 4px}
+.modepill{display:inline-flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 8px 8px 16px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.modepill b{background:var(--red);color:#fff;border-radius:999px;padding:5px 12px;font-size:11px}
+.section{margin-top:32px}
+.kick2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--red);font-weight:600}
+.section>h2{font-size:21px;font-weight:700;letter-spacing:-.01em;margin:8px 0 16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld label{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.fld input,.fld select{font-family:var(--sans);font-size:14px;border:1px solid var(--line-strong);background:var(--field);border-radius:8px;padding:10px 12px;color:var(--ink);width:100%;outline:none;transition:.15s}
+.fld input:focus,.fld select:focus{border-color:var(--red);background:#fff}
+.subnote{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin:2px 0 10px}
+
+/* Dropzone */
+.drop{border:2px dashed var(--line-strong);border-radius:12px;padding:40px;text-align:center;cursor:pointer;background:var(--field);transition:.15s}
+.drop.over{border-color:var(--red);background:var(--red-soft)}
+.drop svg{width:42px;height:42px;color:var(--red);margin-bottom:10px}
+.drop b{display:block;font-size:16px}
+.drop small{color:var(--faint);font-family:var(--mono);font-size:11px;letter-spacing:.06em}
+
+/* Positions */
+.poshead{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.poshead .cnt{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.poshead .planmeta{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold)}
+.poslist{display:flex;flex-direction:column}
+.posrow{display:grid;grid-template-columns:30px 1fr 90px 110px 70px 78px 96px;gap:12px;align-items:center;
+  padding:12px 4px;border-top:1px solid var(--line)}
+.posrow:first-child{border-top:0}
+.posrow .pidx{width:26px;height:26px;border-radius:7px;background:var(--ink);color:#fff;font-family:var(--mono);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.posrow.warn .pidx{background:var(--red)}
+.posrow .nm b{font-size:14px;font-weight:700}
+.posrow .nm small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.04em}
+.posrow input,.posrow select{font-family:var(--sans);font-size:13px;border:1px solid var(--line-strong);background:var(--field);border-radius:7px;padding:7px 8px;color:var(--ink);width:100%;outline:none}
+.posrow input:focus,.posrow select:focus{border-color:var(--red);background:#fff}
+.posrow .mini label{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:3px}
+.posrow .price{text-align:right;font-family:var(--mono);font-weight:600;font-size:15px}
+.poscols{display:grid;grid-template-columns:30px 1fr 90px 110px 70px 78px 96px;gap:12px;padding:0 4px 8px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.poscols span{text-align:center}.poscols span.l{text-align:left}.poscols span.r{text-align:right}
+
+/* PDF preview */
+.pdfbox{margin-top:14px}
+.pdfbar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.pdfbar button{font-family:var(--mono);font-size:11px;background:var(--field);border:1px solid var(--line-strong);border-radius:7px;padding:6px 11px;cursor:pointer;color:var(--ink)}
+.pdfbar .pi{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.canvaswrap{display:flex;justify-content:center;background:var(--field);border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto;max-height:560px}
+#planCanvas{background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.12);max-width:100%}
+
+/* Buttons */
+.btn{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:12px 17px;border:0;border-radius:8px;cursor:pointer;font-weight:600;transition:.15s}
+.btn.p{background:var(--red);color:#fff}.btn.p:hover{background:var(--red2)}
+.btn.s{background:#fff;border:1px solid var(--line-strong);color:var(--ink)}.btn.s:hover{border-color:var(--ink)}
+.btn.g{background:transparent;color:#cfcdc4;border:1px solid #45474a}.btn.g:hover{border-color:#fff;color:#fff}
+
+/* Bottom bar */
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--ink);color:#fff;z-index:60;box-shadow:0 -6px 24px rgba(0,0,0,.2)}
+.bar .str{display:flex;height:4px}.bar .str span{flex:1}
+.bar .in{max-width:1120px;margin:0 auto;padding:11px 20px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.bar .sums{display:flex;gap:24px;flex-wrap:wrap;align-items:baseline}
+.bar .b{display:flex;flex-direction:column;gap:1px}
+.bar .k{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#a9a69c}
+.bar .vv{font-family:var(--mono);font-weight:600;font-size:17px}.bar .vv.big{font-size:22px}.bar .vv.cr{color:#ff8d7a}
+.bar .acts{display:flex;gap:8px}
+
+/* Material modal */
+.modal{position:fixed;inset:0;background:rgba(15,16,18,.55);display:flex;align-items:center;justify-content:center;z-index:120;padding:28px}
+.modal-card{background:#fff;border-radius:14px;width:min(540px,95vw);max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-h{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+.modal-h h3{font-size:16px}.modal-h button{margin-left:auto;background:var(--field);border:0;width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:15px}
+.modal-b{padding:18px 20px;overflow:auto}
+.modal-f{padding:13px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:9px}
+.mtab{width:100%;border-collapse:collapse}
+.mtab th{text-align:left;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:4px 6px}
+.mtab td{padding:3px 6px}.mtab input{width:100%;font-family:var(--sans);font-size:14px;border:1px solid var(--line-strong);background:var(--field);border-radius:7px;padding:7px 9px;outline:none}
+.mtab input.pr{text-align:right;font-family:var(--mono)}
+
+/* Angebot (print) */
+#angebot{position:fixed;inset:0;background:#fff;z-index:200;overflow:auto}
+.angbar{position:sticky;top:0;background:var(--red);display:flex;justify-content:center;gap:11px;padding:11px}
+.angbar button{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border:0;border-radius:8px;padding:11px 18px;cursor:pointer}
+.angbar .back{background:rgba(255,255,255,.18);color:#fff}
+.angbar .print{background:#fff;color:var(--red)}
+.ang{max-width:820px;margin:0 auto;padding:40px 50px;color:var(--ink)}
+.ang .lead{font-size:14px;margin-bottom:20px;line-height:1.6}
+.ang .basis{background:var(--ink);color:#fff;border-radius:12px;padding:18px 22px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin:18px 0}
+.ang .basis .t{font-weight:800;font-size:19px}
+.ang .basis .p{font-family:var(--mono);font-weight:600;font-size:21px;white-space:nowrap}
+.ang .optgroup{margin-top:22px}
+.ang .ogh{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--red);font-weight:600;border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:4px}
+.ang .opt{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}
+.ang .opt .on b{font-weight:700}.ang .opt .on small{font-family:var(--mono);font-size:10px;color:var(--faint);margin-left:6px}
+.ang .opt .op{font-family:var(--mono);font-weight:600;white-space:nowrap}
+.ang .sums{margin-top:24px;border-top:2px solid var(--ink);padding-top:12px}
+.ang .srow{display:flex;justify-content:space-between;padding:5px 0;font-size:14px}
+.ang .srow.tot{font-weight:800;font-size:17px;margin-top:6px}
+.ang .srow.tot .v{color:var(--red);font-family:var(--mono)}
+.ang .terms{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:30px}
+.ang .terms h4{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--red);margin-bottom:6px}
+.ang .terms p{font-size:12.5px;color:var(--muted);line-height:1.5}
+.ang .fine{margin-top:26px;border-top:1px solid var(--line);padding-top:14px;font-size:11px;color:var(--faint);line-height:1.6}
+.ang .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid var(--ink);padding-bottom:16px;margin-bottom:24px}
+.ang .head .co b{font-size:17px}.ang .head .co small{display:block;color:var(--muted);line-height:1.5;margin-top:4px}
+.ang .head .meta{text-align:right;font-size:12.5px;color:var(--muted)}
+.ang .head .meta b{display:block;font-size:20px;color:var(--ink)}
+@media print{.angbar{display:none}body{padding:0}#angebot{position:static}}
+
+/* CAD viewer */
+.posrow .vbtn{font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;background:var(--field);border:1px solid var(--line-strong);border-radius:6px;padding:5px 7px;cursor:pointer;color:var(--ink);margin-top:3px}
+.posrow .vbtn:hover{border-color:var(--red);color:var(--red)}
+.srcbadge{font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;padding:1px 5px;border-radius:4px;margin-left:7px;vertical-align:middle}
+.srcbadge.pdf{background:#ede7df;color:var(--gold)}
+.srcbadge.step{background:#e7eef7;color:#1f6feb}
+.srcbadge.dxf{background:#e9f5ec;color:var(--pos)}
+.viewer{position:fixed;inset:0;background:rgba(15,16,18,.62);z-index:140;display:flex;align-items:center;justify-content:center;padding:24px}
+.viewer-card{background:#fff;border-radius:14px;width:min(940px,96vw);height:min(720px,92vh);display:flex;flex-direction:column;overflow:hidden}
+.viewer-h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.viewer-h h3{font-size:16px}.viewer-h .meta{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.04em}
+.viewer-h button.x{margin-left:auto;background:var(--field);border:0;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px}
+.viewer-body{flex:1;position:relative;background:linear-gradient(180deg,#f4f5f6,#e7e9ec);min-height:0;overflow:hidden}
+.viewer-body canvas{display:block;width:100%;height:100%}
+.viewer-body svg{width:100%;height:100%}
+.viewer-tools{position:absolute;left:14px;bottom:14px;display:flex;gap:7px;flex-wrap:wrap}
+.viewer-tools button{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;background:rgba(255,255,255,.92);border:1px solid var(--line-strong);border-radius:7px;padding:8px 11px;cursor:pointer;color:var(--ink)}
+.viewer-tools button:hover{border-color:var(--red);color:var(--red)}
+.viewer-info{position:absolute;right:14px;top:14px;background:rgba(22,24,26,.86);color:#fff;border-radius:10px;padding:12px 14px;font-family:var(--mono);font-size:11px;line-height:1.7;min-width:170px}
+.viewer-info b{color:#ff9b8a}
+.viewer-hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);font-family:var(--mono);font-size:10px;color:var(--muted)}
+.toast{position:fixed;bottom:86px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 20px;border-radius:9px;font-family:var(--mono);font-size:12px;z-index:300}
+.loadov{position:fixed;inset:0;background:rgba(255,255,255,.78);z-index:160;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;color:var(--ink)}
+.spin{width:16px;height:16px;border:2px solid var(--line-strong);border-top-color:var(--red);border-radius:50%;display:inline-block;margin-right:10px;animation:sp .7s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+@media(max-width:760px){
+  .posrow,.poscols{grid-template-columns:26px 1fr 70px 84px;}
+  .posrow .mini.d,.posrow .mini.b,.poscols .hd,.poscols .hb{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar"><div class="topbar-in">
+  <div class="tb-logo">
+    <img class="mk" src="logo.png" alt="Alzinger">
+    <span class="wm">ALZINGER</span>
+  </div>
+  <div class="tb-div"></div>
+  <div class="tb-row">
+    <div class="tb-icons">
+      <a title="E-Mail"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></a>
+      <a title="Telefon"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-3 2a14 14 0 006 6l2-3 5 2v4a2 2 0 01-2 2A17 17 0 013 6a2 2 0 012-2z"/></svg></a>
+      <a title="Web"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></a>
+    </div>
+    <div class="tb-right">
+      <div class="langsel">
+        <button class="active">DE</button><button>EN</button><button>PL</button><button>FR</button>
+      </div>
+      <button class="tb-burger"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    </div>
+  </div>
+</div></div>
+
+<!-- HERO -->
+<section class="hero"><div class="hero-in">
+  <div class="kick">Alzinger Maschinenbau · Laserschneiden &amp; Abkanten</div>
+  <h1>Angebot erstellen</h1>
+  <div class="sub">Laser- &amp; Abkantteile · TruTops Boost · Serie 2026</div>
+  <button class="cta" onclick="document.getElementById('sec-pos').scrollIntoView()">Plan laden ↓</button>
+</div></section>
+
+<div class="wrap">
+  <div class="modeline"><div class="modepill">Aktiver Modus: <b>ANGEBOT</b></div></div>
+
+  <!-- 01 Dokumentdaten -->
+  <section class="section">
+    <div class="kick2">01 · Dokumentdaten</div>
+    <h2>Angebot &amp; Verkäufer</h2>
+    <div class="card"><div class="grid">
+      <div class="fld"><label>Angebotsnummer</label><input id="d_nr" placeholder="z. B. ANG-2026-001"></div>
+      <div class="fld"><label>Datum</label><input id="d_datum"></div>
+      <div class="fld"><label>Ort</label><input id="d_ort" value="Schierling"></div>
+      <div class="fld"><label>Verkäufer</label><input id="d_verk" placeholder="Name Verkäufer"></div>
+      <div class="fld"><label>Telefon Verkäufer</label><input id="d_tel" placeholder="optional"></div>
+      <div class="fld"><label>E-Mail Verkäufer</label><input id="d_mail" placeholder="optional"></div>
+    </div></div>
+  </section>
+
+  <!-- 02 Kunde -->
+  <section class="section">
+    <div class="kick2">02 · Kunde</div>
+    <h2>Rechnungsanschrift &amp; Ansprechpartner</h2>
+    <div class="card"><div class="grid">
+      <div class="fld"><label>Firmenname</label><input id="k_firma"></div>
+      <div class="fld"><label>Anrede</label><select id="k_anrede"><option>Herr</option><option>Frau</option><option>Firma</option></select></div>
+      <div class="fld"><label>Vorname</label><input id="k_vor"></div>
+      <div class="fld"><label>Nachname</label><input id="k_nach"></div>
+      <div class="fld"><label>Straße</label><input id="k_str"></div>
+      <div class="fld"><label>PLZ</label><input id="k_plz"></div>
+      <div class="fld"><label>Ort</label><input id="k_ort"></div>
+      <div class="fld"><label>Land</label><input id="k_land" placeholder="Deutschland"></div>
+      <div class="fld"><label>Telefon</label><input id="k_tel" placeholder="optional"></div>
+      <div class="fld"><label>E-Mail</label><input id="k_mail" placeholder="optional"></div>
+      <div class="fld"><label>USt-IdNr.</label><input id="k_ust" placeholder="optional"></div>
+    </div></div>
+  </section>
+
+  <!-- 03 Positionen -->
+  <section class="section" id="sec-pos">
+    <div class="kick2">03 · Positionen</div>
+    <h2>Laser- &amp; Abkantteile</h2>
+    <div class="card">
+      <div id="dropArea">
+        <div class="drop" id="drop">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0L8 8m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round"/></svg>
+          <b>Dateien hier ablegen oder klicken</b>
+          <small>TruTops-Plan (PDF) · CAD-Teil (STEP/STP · DXF) · mehrere möglich</small>
+        </div>
+      </div>
+      <div id="posArea" class="hidden">
+        <div class="poshead">
+          <span class="cnt" id="posCount">0 Positionen</span>
+          <span class="planmeta" id="planMeta"></span>
+        </div>
+        <div class="poscols">
+          <span></span><span class="l">Teile-Nr</span><span>Material</span><span>Dicke / Menge</span><span>Menge</span><span class="hb">Biegungen</span><span class="r">Position</span>
+        </div>
+        <div class="poslist" id="poslist"></div>
+        <div class="pdfbox" id="pdfbox">
+          <div class="pdfbar">
+            <button id="pgPrev">‹ Seite</button><button id="pgNext">Seite ›</button>
+            <button id="zOut">−</button><button id="zIn">+</button>
+            <button id="reload" style="margin-left:6px">↻ Anderen Plan laden</button>
+            <span class="pi" id="pageInfo"></span>
+          </div>
+          <div class="canvaswrap"><canvas id="planCanvas"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <input type="file" id="fileInput" accept=".pdf,.stp,.step,.dxf" multiple class="hidden">
+  </section>
+
+  <!-- 04 Kalkulationssätze -->
+  <section class="section">
+    <div class="kick2">04 · Kalkulation</div>
+    <h2>Sätze &amp; Marge</h2>
+    <div class="subnote">Standard aus TruTops Calculate · TruLaser 5030 = 134,17 €/h</div>
+    <div class="card"><div class="grid">
+      <div class="fld"><label>Laser €/h</label><input id="p_laser"></div>
+      <div class="fld"><label>Abkanten €/h</label><input id="p_abk"></div>
+      <div class="fld"><label>Marge %</label><input id="p_marge"></div>
+      <div class="fld"><label>Mindestposition €</label><input id="p_min"></div>
+      <div class="fld"><label>Rüstkosten €/Position</label><input id="p_ruest"></div>
+      <div class="fld"><label>Sekunden je Biegung</label><input id="p_bieg"></div>
+      <div class="fld" style="justify-content:flex-end"><button class="btn s" id="btnMaterial">Materialpreise bearbeiten</button></div>
+    </div></div>
+  </section>
+
+  <div style="height:30px"></div>
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bar">
+  <div class="str"><span style="background:#c00000"></span><span style="background:#16181a"></span><span style="background:#a28231"></span><span style="background:#c00000"></span></div>
+  <div class="in">
+    <div class="sums">
+      <div class="b"><span class="k">Positionen</span><span class="vv" id="bPos">0</span></div>
+      <div class="b"><span class="k">Teile gesamt</span><span class="vv" id="bStk">0</span></div>
+      <div class="b"><span class="k">Netto gesamt</span><span class="vv big cr" id="bTotal">0,00 €</span></div>
+    </div>
+    <div class="acts">
+      <button class="btn g" id="btnCsv">⤓ CSV</button>
+      <button class="btn p" id="btnAngebot">Angebot ansehen ›</button>
+    </div>
+  </div>
+</div>
+
+<script src="lib/pdf.min.js"></script>
+<script src="lib/three.min.js"></script>
+<script src="lib/OrbitControls.js"></script>
+<script src="lib/dxf-parser.js"></script>
+<script src="lib/occt-import-js.js"></script>
+<script src="parser.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
