@@ -174,6 +174,15 @@ function meshVolume(pos,idx){ let V=0; const get=i=>[pos[i*3],pos[i*3+1],pos[i*3
   for(let t=0;t<idx.length;t+=3){ const a=get(idx[t]),b=get(idx[t+1]),c=get(idx[t+2]);
     V += (a[0]*(b[1]*c[2]-c[1]*b[2]) - a[1]*(b[0]*c[2]-c[0]*b[2]) + a[2]*(b[0]*c[1]-c[0]*b[1]))/6; }
   return Math.abs(V); }
+function meshArea(pos,idx){ let A=0; const g=i=>[pos[i*3],pos[i*3+1],pos[i*3+2]];
+  for(let t=0;t<idx.length;t+=3){ const a=g(idx[t]),b=g(idx[t+1]),c=g(idx[t+2]);
+    const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2], vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
+    const cx=uy*vz-uz*vy,cy=uz*vx-ux*vz,cz=ux*vy-uy*vx; A+=0.5*Math.hypot(cx,cy,cz); }
+  return A; }
+// Blechdicke aus Volumen/Oberfläche (dünnwandig) -> auf Standarddicke runden
+function snapThickness(t){ const std=[0.5,0.75,1,1.25,1.5,2,2.5,3,4,5,6,8,10,12,15,20,25];
+  if(!(t>0)||t>26) return +(+t||2).toFixed(1);
+  let best=std[0],bd=1e9; for(const s of std){const d=Math.abs(s-t); if(d<bd){bd=d;best=s;}} return best; }
 async function loadStep(buf,name){
   showLoad('STEP wird eingelesen … (große Baugruppen können dauern)');
   await new Promise(r=>setTimeout(r,30));
@@ -181,18 +190,22 @@ async function loadStep(buf,name){
     const occt=await ensureOcct();
     const r=occt.ReadStepFile(new Uint8Array(buf),null);
     if(!r||!r.success||!r.meshes||!r.meshes.length){ toast('STEP ohne darstellbare Volumenkörper: '+name); return; }
-    let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity,vol=0;
+    let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity,vol=0,area=0;
     const meshes=r.meshes.map(m=>{
       const pos=m.attributes.position.array, idx=m.index?m.index.array:null;
       for(let i=0;i<pos.length;i+=3){const x=pos[i],y=pos[i+1],z=pos[i+2];
         if(x<minX)minX=x;if(y<minY)minY=y;if(z<minZ)minZ=z;if(x>maxX)maxX=x;if(y>maxY)maxY=y;if(z>maxZ)maxZ=z;}
-      if(idx) vol+=meshVolume(pos,idx);
+      if(idx){ vol+=meshVolume(pos,idx); area+=meshArea(pos,idx); }
       return {pos:Float32Array.from(pos), idx:idx?Uint32Array.from(idx):null, color:m.color};
     });
     const dims=[maxX-minX,maxY-minY,maxZ-minZ].sort((a,b)=>a-b);
+    // Blechdicke = 2·V/A (dünnwandig), gedeckelt auf kleinste Bauteilabmessung, auf Standarddicke gerundet
+    let thRaw = area>0 ? 2*vol/area : dims[0];
+    if(thRaw>dims[0]) thRaw=dims[0];
+    const dicke = snapThickness(thRaw);
     const p={ teilenr:name.replace(/\.(stp|step)$/i,''), source:'step', quelle:name, material:'1.4301',
-      dicke:+dims[0].toFixed(2)||2, menge:1, biegungen:0, gewicht:0, einstech:0, auftrag:'',
-      vol_m3:vol/1e9, bbox:{minX,minY,minZ,maxX,maxY,maxZ,dims}, step:meshes, laser_min:0, _autoLaser:false };
+      dicke, menge:1, biegungen:0, gewicht:0, einstech:0, auftrag:'',
+      vol_m3:vol/1e9, area_m2:area/1e6, bbox:{minX,minY,minZ,maxX,maxY,maxZ,dims}, step:meshes, laser_min:0, _autoLaser:false };
     recomputeCad(p); PARTS.push(p);
     toast(`STEP übernommen: ${p.teilenr} · ${meshes.length} Körper · ${fmt(dims[2],0)}×${fmt(dims[1],0)}×${fmt(dims[0],1)} mm`);
   } finally { hideLoad(); }
