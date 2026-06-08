@@ -192,6 +192,32 @@ function meshArea(pos,idx){ let A=0; const g=i=>[pos[i*3],pos[i*3+1],pos[i*3+2]]
 function snapThickness(t){ const std=[0.5,0.75,1,1.25,1.5,2,2.5,3,4,5,6,8,10,12,15,20,25];
   if(!(t>0)||t>26) return +(+t||2).toFixed(1);
   let best=std[0],bd=1e9; for(const s of std){const d=Math.abs(s-t); if(d<bd){bd=d;best=s;}} return best; }
+// Biegungen aus STEP-Geometrie schätzen: Anzahl flacher Schenkel-Ausrichtungen − 1
+function detectBends(meshes){
+  const TOL=Math.cos(12*Math.PI/180); const clusters=[]; let total=0;
+  for(const m of meshes){ const pos=m.pos, idx=m.idx; if(!idx) continue;
+    const g=i=>[pos[i*3],pos[i*3+1],pos[i*3+2]];
+    for(let t=0;t<idx.length;t+=3){
+      const a=g(idx[t]),b=g(idx[t+1]),c=g(idx[t+2]);
+      let nx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]);
+      let ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+      let nz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+      const len=Math.hypot(nx,ny,nz); if(len<1e-9) continue;
+      const area=0.5*len; total+=area; nx/=len;ny/=len;nz/=len;
+      // n und -n als gleiche Achse behandeln (Ober-/Unterseite eines Schenkels)
+      if(nz<-1e-6||(Math.abs(nz)<=1e-6&&(ny<-1e-6||(Math.abs(ny)<=1e-6&&nx<0)))){nx=-nx;ny=-ny;nz=-nz;}
+      let f=false;
+      for(const cl of clusters){ if(cl.ax*nx+cl.ay*ny+cl.az*nz>TOL){
+        const w=cl.area+area; cl.ax=(cl.ax*cl.area+nx*area)/w; cl.ay=(cl.ay*cl.area+ny*area)/w; cl.az=(cl.az*cl.area+nz*area)/w;
+        const ll=Math.hypot(cl.ax,cl.ay,cl.az)||1; cl.ax/=ll;cl.ay/=ll;cl.az/=ll; cl.area=w; f=true; break; } }
+      if(!f) clusters.push({ax:nx,ay:ny,az:nz,area});
+    }
+  }
+  if(!clusters.length||total<=0) return 0;
+  const maxA=Math.max(...clusters.map(c=>c.area));
+  const flanges=clusters.filter(c=>c.area>0.12*maxA && c.area>0.03*total).length;
+  return Math.max(0, flanges-1);
+}
 async function loadStep(buf,name){
   showLoad('STEP wird eingelesen … (große Baugruppen können dauern)');
   await new Promise(r=>setTimeout(r,30));
@@ -212,11 +238,12 @@ async function loadStep(buf,name){
     let thRaw = area>0 ? 2*vol/area : dims[0];
     if(thRaw>dims[0]) thRaw=dims[0];
     const dicke = snapThickness(thRaw);
+    const bends=detectBends(meshes);
     const p={ teilenr:name.replace(/\.(stp|step)$/i,''), source:'step', quelle:name, material:'1.4301',
-      dicke, menge:1, biegungen:0, gewicht:0, einstech:0, auftrag:'',
+      dicke, menge:1, biegungen:bends, _autoBends:true, gewicht:0, einstech:0, auftrag:'',
       vol_m3:vol/1e9, area_m2:area/1e6, bbox:{minX,minY,minZ,maxX,maxY,maxZ,dims}, step:meshes, laser_min:0, _autoLaser:false };
     recomputeCad(p); PARTS.push(p);
-    toast(`STEP übernommen: ${p.teilenr} · ${meshes.length} Körper · ${fmt(dims[2],0)}×${fmt(dims[1],0)}×${fmt(dims[0],1)} mm`);
+    toast(`STEP: ${p.teilenr} · ${fmt(dims[2],0)}×${fmt(dims[1],0)}×${fmt(dims[0],1)} mm · ${bends} Biegung(en) erkannt`);
   } finally { hideLoad(); }
 }
 
@@ -282,7 +309,7 @@ function renderPositions(){
       <div class="mini mat"><label>Material</label><select data-i="${i}" data-k="material">${matOpts}</select></div>
       <div class="mini d"><label>Dicke mm</label><input data-i="${i}" data-k="dicke" value="${fmt(p.dicke,2)}"></div>
       <div class="mini m"><label>Menge</label><input data-i="${i}" data-k="menge" value="${c.menge}"></div>
-      <div class="mini b"><label>Biegungen</label><input data-i="${i}" data-k="biegungen" value="${p.biegungen||0}"></div>
+      <div class="mini b"><label>Biegungen${p.source==='step'&&p._autoBends?' •':''}</label><input data-i="${i}" data-k="biegungen" value="${p.biegungen||0}" title="${p.source==='step'&&p._autoBends?'aus 3D automatisch erkannt – bitte prüfen':''}"></div>
       <div class="price kg" title="Verkaufspreis je kg (VK/St ÷ Gewicht)">${p.gewicht>0?eur(c.vk/p.gewicht):'–'}</div>
       <div class="price ep" title="Einzelpreis netto / Stück">${eur(c.vk)}</div>
       <div class="price" title="Gesamtpreis netto (${c.menge}× ${eur(c.vk)})">${eur(c.position)} ▾</div>`;
@@ -311,7 +338,7 @@ function renderPositions(){
     inp.onchange=e=>{
       const i=+e.target.dataset.i,k=e.target.dataset.k,v=e.target.value,p=PARTS[i];
       if(k==='menge') p[k]=Math.max(1,parseInt(v)||1);
-      else if(k==='biegungen') p[k]=Math.max(0,parseInt(v)||0);
+      else if(k==='biegungen'){ p[k]=Math.max(0,parseInt(v)||0); p._autoBends=false; }
       else if(k==='dicke') p[k]=numDe(v);
       else p[k]=v;
       if(p.source==='dxf'||p.source==='step') recomputeCad(p);
