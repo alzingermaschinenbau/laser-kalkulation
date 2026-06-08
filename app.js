@@ -169,6 +169,49 @@ async function loadStep(buf,name){
   } finally { hideLoad(); }
 }
 
+// ---------- Vorschau-Kacheln ----------
+function dxfPathD(draw){
+  let d='';
+  for(const e of draw){
+    if(e.t==='pl'){ e.pts.forEach((pt,k)=>{ d+=(k?'L':'M')+pt.x+' '+(-pt.y)+' '; }); if(e.closed)d+='Z '; }
+    else if(e.t==='circle'){ const r=e.r,c=e.c; d+=`M ${c.x-r} ${-c.y} a ${r} ${r} 0 1 0 ${2*r} 0 a ${r} ${r} 0 1 0 ${-2*r} 0 `; }
+    else if(e.t==='arc'){ const r=e.r,c=e.c; const x0=c.x+r*Math.cos(e.a0),y0=c.y+r*Math.sin(e.a0),x1=c.x+r*Math.cos(e.a1),y1=c.y+r*Math.sin(e.a1); let da=e.a1-e.a0;if(da<0)da+=2*Math.PI;const lg=da>Math.PI?1:0; d+=`M ${x0} ${-y0} A ${r} ${r} 0 ${lg} 0 ${x1} ${-y1} `; }
+  }
+  return d;
+}
+function dxfThumbSvg(p){
+  const {minX,minY,w,h}=p.bbox; const pad=Math.max(w,h)*0.08||2; const sw=Math.max(w,h)/26||1;
+  return `<svg viewBox="${minX-pad} ${-(minY+h)-pad} ${w+2*pad} ${h+2*pad}" preserveAspectRatio="xMidYMid meet"><path d="${dxfPathD(p.dxf)}" fill="none" stroke="#c00000" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+function makeStepThumb(p){
+  if(p._thumb!==undefined) return p._thumb;
+  try{
+    const S=92;
+    const r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
+    r.setPixelRatio(2); r.setSize(S,S);
+    const sc=new THREE.Scene();
+    sc.add(new THREE.AmbientLight(0xffffff,0.6));
+    sc.add(new THREE.HemisphereLight(0xffffff,0x6b7079,0.9));
+    const l1=new THREE.DirectionalLight(0xffffff,0.85); l1.position.set(1,1.3,1.1); sc.add(l1);
+    const l2=new THREE.DirectionalLight(0xffffff,0.45); l2.position.set(-1,-0.4,-1); sc.add(l2);
+    const g=new THREE.Group();
+    p.step.forEach(m=>{ const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(m.pos,3)); if(m.idx)geo.setIndex(new THREE.BufferAttribute(m.idx,1)); geo.computeVertexNormals();
+      const hc=m.color&&(m.color[0]+m.color[1]+m.color[2])>0.12; const col=hc?new THREE.Color(m.color[0],m.color[1],m.color[2]):new THREE.Color(0xb4bac1);
+      g.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:col,metalness:0.18,roughness:0.62,side:THREE.DoubleSide}))); });
+    const box=new THREE.Box3().setFromObject(g),ctr=box.getCenter(new THREE.Vector3()),sz=box.getSize(new THREE.Vector3()); g.position.sub(ctr); sc.add(g);
+    const cam=new THREE.PerspectiveCamera(45,1,0.01,1e7); const rad=Math.max(sz.x,sz.y,sz.z,1)*0.5; const d=rad/Math.sin((45*Math.PI/180)/2)*1.15; cam.near=d/100;cam.far=d*100;cam.updateProjectionMatrix(); cam.position.set(d*0.55,d*0.5,d*0.8); cam.lookAt(0,0,0);
+    r.render(sc,cam); const url=r.domElement.toDataURL('image/png'); r.dispose();
+    g.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)o.material.dispose();});
+    p._thumb=url; return url;
+  }catch(e){ console.error('thumb',e); p._thumb=null; return null; }
+}
+function phIcon(){ return `<svg class="ph" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>`; }
+function thumbHtml(p){
+  if(p.source==='dxf') return dxfThumbSvg(p);
+  if(p.source==='step'){ const u=makeStepThumb(p); return u?`<img src="${u}" alt="">`:phIcon(); }
+  return phIcon();
+}
+
 // ---------- Positionen ----------
 function renderPositions(){
   const el=$('#poslist'); el.innerHTML='';
@@ -184,7 +227,7 @@ function renderPositions(){
     row.className='posrow'+(!c.known&&p.gewicht>0?' warn':'');
     row.innerHTML=`
       <div class="pidx">${i+1}</div>
-      <div class="nm"><b>${p.teilenr||'—'}${badge}</b><small>${sub}</small>${viewBtn}</div>
+      <div class="nm"><div class="thumb">${thumbHtml(p)}</div><div class="nmtext"><b>${p.teilenr||'—'}${badge}</b><small>${sub}</small>${viewBtn}</div></div>
       <div class="mini mat"><label>Material</label><select data-i="${i}" data-k="material">${matOpts}</select></div>
       <div class="mini d"><label>Dicke mm</label><input data-i="${i}" data-k="dicke" value="${fmt(p.dicke,2)}"></div>
       <div class="mini m"><label>Menge</label><input data-i="${i}" data-k="menge" value="${c.menge}"></div>
@@ -296,11 +339,12 @@ function renderStepView(body,p){
   const home=new THREE.Vector3(fitDist*0.6,fitDist*0.5,fitDist*0.8);
   cam.near=fitDist/100; cam.far=fitDist*100; cam.updateProjectionMatrix();
   cam.position.copy(home); cam.lookAt(0,0,0);
-  const controls=new THREE.OrbitControls(cam,renderer.domElement);
-  controls.enableDamping=true; controls.dampingFactor=0.09; controls.target.set(0,0,0);
-  controls.rotateSpeed=0.9; controls.zoomSpeed=1.0; controls.update();
+  const controls=new THREE.TrackballControls(cam,renderer.domElement);
+  controls.rotateSpeed=3.4; controls.zoomSpeed=1.3; controls.panSpeed=0.8;
+  controls.staticMoving=false; controls.dynamicDampingFactor=0.12;
+  controls.target.set(0,0,0); controls.handleResize(); controls.update();
   let wire=false;
-  const setCam=(x,y,z)=>{cam.position.set(x,y,z);controls.target.set(0,0,0);controls.update();};
+  const setCam=(x,y,z)=>{cam.up.set(0,1,0);cam.position.set(x,y,z);controls.target.set(0,0,0);controls.update();};
   _three={renderer,raf:0,scene,cam};
   const loop=()=>{ _three.raf=requestAnimationFrame(loop); controls.update(); renderer.render(scene,cam); };
   addTools(body,[
@@ -311,7 +355,7 @@ function renderStepView(body,p){
     ['Seite',()=>setCam(fitDist,0,0)]]);
   body.insertAdjacentHTML('beforeend','<div class="viewer-hint">STEP · ziehen zum Drehen · Rad zum Zoomen · rechte Maustaste zum Verschieben</div>');
   loop();
-  const onResize=()=>{const r=body.getBoundingClientRect();const w=Math.max(40,r.width),h=Math.max(40,r.height);cam.aspect=w/h;cam.updateProjectionMatrix();renderer.setSize(w,h);};
+  const onResize=()=>{const r=body.getBoundingClientRect();const w=Math.max(40,r.width),h=Math.max(40,r.height);cam.aspect=w/h;cam.updateProjectionMatrix();renderer.setSize(w,h);controls.handleResize();};
   _three.onResize=onResize; window.addEventListener('resize',onResize);
   // nach Layout-Settling einmal korrekt nachziehen
   requestAnimationFrame(onResize); setTimeout(onResize,120);
@@ -381,7 +425,7 @@ function openAngebot(){
    <div class="ang">
      <div class="head">
        <div style="display:flex;gap:13px;align-items:center">
-         <img src="logo.png" width="50" height="50" style="border-radius:9px">
+         <img src="logo.png" style="height:48px;width:auto" alt="Alzinger Maschinenbau">
          <div class="co"><b>Alzinger Maschinenbau GmbH</b><small>Am Gewerbring 14 · 84069 Schierling${verk?'<br>Verkäufer: '+verk:''}</small></div>
        </div>
        <div class="meta">Angebot<br><b>${nr}</b><br>${datum}${g('d_ort')?' · '+g('d_ort'):''}</div>

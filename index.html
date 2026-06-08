@@ -18,7 +18,7 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-heigh
 .topbar{position:sticky;top:0;z-index:80;background:var(--red);color:#fff}
 .topbar-in{max-width:1120px;margin:0 auto;padding:14px 20px 12px;position:relative}
 .tb-logo{display:flex;align-items:center;justify-content:center;gap:11px}
-.tb-logo .mk{height:34px;width:34px;display:block;border-radius:6px}
+.tb-logo .logo{height:30px;width:auto;display:block}
 .tb-logo .wm{font-weight:800;font-size:22px;letter-spacing:.12em}
 .tb-div{height:1px;background:rgba(255,255,255,.45);margin:12px 0}
 .tb-row{display:flex;align-items:center;justify-content:space-between}
@@ -76,6 +76,12 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-heigh
 .posrow:first-child{border-top:0}
 .posrow .pidx{width:26px;height:26px;border-radius:7px;background:var(--ink);color:#fff;font-family:var(--mono);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
 .posrow.warn .pidx{background:var(--red)}
+.posrow .nm{display:flex;align-items:center;gap:11px;min-width:0}
+.posrow .nmtext{min-width:0}
+.posrow .thumb{width:46px;height:46px;border:1px solid var(--line);border-radius:9px;background:#fbfbfa;
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.posrow .thumb img,.posrow .thumb svg{max-width:100%;max-height:100%;display:block}
+.posrow .thumb .ph{color:var(--faint)}
 .posrow .nm b{font-size:14px;font-weight:700}
 .posrow .nm small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.04em}
 .posrow input,.posrow select{font-family:var(--sans);font-size:13px;border:1px solid var(--line-strong);background:var(--field);border-radius:7px;padding:7px 8px;color:var(--ink);width:100%;outline:none}
@@ -191,8 +197,7 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-heigh
 <!-- TOPBAR -->
 <div class="topbar"><div class="topbar-in">
   <div class="tb-logo">
-    <img class="mk" src="logo.png" alt="Alzinger">
-    <span class="wm">ALZINGER</span>
+    <img class="logo" src="logo-white.png" alt="Alzinger Maschinenbau">
   </div>
   <div class="tb-div"></div>
   <div class="tb-row">
@@ -325,6 +330,7 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-heigh
 <script src="lib/pdf.min.js"></script>
 <script src="lib/three.min.js"></script>
 <script src="lib/OrbitControls.js"></script>
+<script src="lib/TrackballControls.js"></script>
 <script src="lib/dxf-parser.js"></script>
 <script src="lib/occt-import-js.js"></script>
 <script src="parser.js"></script>
