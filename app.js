@@ -527,9 +527,15 @@ $('#pgNext').onclick=()=>renderPage(PAGE+1);
 $('#zIn').onclick=()=>{SCALE=Math.min(3,SCALE+0.2);renderPage(PAGE);};
 $('#zOut').onclick=()=>{SCALE=Math.max(0.5,SCALE-0.2);renderPage(PAGE);};
 $('#btnMaterial').onclick=openMaterial;
+// Einstellungs-Drawer (Hamburger-Menü)
+const _drawer=$('#settingsDrawer'),_drawerOv=$('#drawerOv');
+function toggleDrawer(open){ _drawer.classList.toggle('open',open); _drawerOv.classList.toggle('open',open); }
+$('#burger').onclick=()=>toggleDrawer(!_drawer.classList.contains('open'));
+$('#drawerClose').onclick=()=>toggleDrawer(false);
+$('#drawerOv').onclick=()=>toggleDrawer(false);
 $('#btnCsv').onclick=exportCsv;
 $('#btnAngebot').onclick=()=>{ if(!PARTS.length){toast('Erst Dateien laden.');return;} openAngebot(); };
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeViewer(); $('#angebot')?.remove(); } });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeViewer(); $('#angebot')?.remove(); toggleDrawer(false); } });
 bindParams();
 window.__loadUrl=async url=>{const b=await(await fetch(url)).arrayBuffer();await loadPlan(b,url.split('/').pop());showWork();renderPositions();recalc();};
 window.__loadDxfUrl=async url=>{const t=await(await fetch(url)).text();await loadDxf(t,url.split('/').pop());showWork();renderPositions();recalc();};

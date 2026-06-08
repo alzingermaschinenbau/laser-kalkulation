@@ -202,6 +202,16 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-heigh
 .viewer-info{position:absolute;right:14px;top:14px;background:rgba(22,24,26,.86);color:#fff;border-radius:10px;padding:12px 14px;font-family:var(--mono);font-size:11px;line-height:1.7;min-width:170px}
 .viewer-info b{color:#ff9b8a}
 .viewer-hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);font-family:var(--mono);font-size:10px;color:var(--muted)}
+.drawer-ov{position:fixed;inset:0;background:rgba(15,16,18,.45);z-index:90;opacity:0;pointer-events:none;transition:opacity .2s}
+.drawer-ov.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;height:100%;width:390px;max-width:93vw;background:#fff;z-index:95;transform:translateX(102%);transition:transform .22s ease;display:flex;flex-direction:column;box-shadow:-12px 0 44px rgba(0,0,0,.2)}
+.drawer.open{transform:translateX(0)}
+.drawer-h{background:var(--red);color:#fff;padding:16px 18px;display:flex;align-items:center;flex-shrink:0}
+.drawer-h h3{font-size:16px;font-weight:700}
+.drawer-h button{margin-left:auto;background:rgba(255,255,255,.18);border:0;color:#fff;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:15px}
+.drawer-b{padding:18px;overflow:auto;flex:1}
+.drawer-b .subnote{margin:14px 0 9px}
+.drawer-b .dgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
 .toast{position:fixed;bottom:86px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 20px;border-radius:9px;font-family:var(--mono);font-size:12px;z-index:300}
 .loadov{position:fixed;inset:0;background:rgba(255,255,255,.78);z-index:160;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;color:var(--ink)}
 .spin{width:16px;height:16px;border:2px solid var(--line-strong);border-top-color:var(--red);border-radius:50%;display:inline-block;margin-right:10px;animation:sp .7s linear infinite;vertical-align:middle}
@@ -229,7 +239,7 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-heigh
       <a title="Web"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></a>
     </div>
     <div class="tb-right">
-      <button class="tb-burger"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <button class="tb-burger" id="burger" title="Sätze &amp; Marge"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
     </div>
   </div>
 </div></div>
@@ -314,32 +324,6 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-heigh
     <input type="file" id="fileInput" accept=".pdf,.stp,.step,.dxf" multiple class="hidden">
   </section>
 
-  <!-- 04 Kalkulationssätze -->
-  <section class="section">
-    <div class="kick2">04 · Kalkulation</div>
-    <h2>Sätze &amp; Marge</h2>
-    <div class="subnote">Standard aus TruTops Calculate · TruLaser 5030 = 134,17 €/h</div>
-    <div class="card">
-      <div class="subnote" style="margin-top:0">Stundensätze &amp; Marge</div>
-      <div class="grid" style="margin-bottom:14px">
-        <div class="fld"><label>Laser €/h</label><input id="p_laser"></div>
-        <div class="fld"><label>Abkanten €/h</label><input id="p_abk"></div>
-        <div class="fld"><label>Programmieren €/h</label><input id="p_prog_satz"></div>
-        <div class="fld"><label>Marge %</label><input id="p_marge"></div>
-        <div class="fld"><label>Mindestposition €</label><input id="p_min"></div>
-      </div>
-      <div class="subnote">Zeiten je Prozess (auf Menge umgelegt, wo fix)</div>
-      <div class="grid">
-        <div class="fld"><label>Programmieren min/Teil</label><input id="p_progmin"></div>
-        <div class="fld"><label>Rüsten Laser min</label><input id="p_rl"></div>
-        <div class="fld"><label>Rüsten Biegen min</label><input id="p_rb"></div>
-        <div class="fld"><label>Handling s/Teil (Biegen)</label><input id="p_hand"></div>
-        <div class="fld"><label>Zeit je Biegung s</label><input id="p_tb"></div>
-        <div class="fld"><label>Laser-Overhead × (DXF)</label><input id="p_ovh"></div>
-        <div class="fld" style="justify-content:flex-end"><button class="btn s" id="btnMaterial">Materialpreise bearbeiten</button></div>
-      </div>
-    </div>
-  </section>
 
   <div style="height:30px"></div>
 </div>
@@ -359,6 +343,33 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-heigh
     </div>
   </div>
 </div>
+
+<!-- Einstellungs-Drawer (über Hamburger-Menü) -->
+<div class="drawer-ov" id="drawerOv"></div>
+<aside class="drawer" id="settingsDrawer">
+  <div class="drawer-h"><h3>Sätze &amp; Kalkulation</h3><button id="drawerClose">✕</button></div>
+  <div class="drawer-b">
+    <div class="subnote" style="margin-top:0">Stundensätze &amp; Marge</div>
+    <div class="dgrid">
+      <div class="fld"><label>Laser €/h</label><input id="p_laser"></div>
+      <div class="fld"><label>Abkanten €/h</label><input id="p_abk"></div>
+      <div class="fld"><label>Programmieren €/h</label><input id="p_prog_satz"></div>
+      <div class="fld"><label>Marge %</label><input id="p_marge"></div>
+      <div class="fld"><label>Mindestposition €</label><input id="p_min"></div>
+    </div>
+    <div class="subnote">Zeiten je Prozess (Fixkosten auf Menge umgelegt)</div>
+    <div class="dgrid">
+      <div class="fld"><label>Programmieren min/Teil</label><input id="p_progmin"></div>
+      <div class="fld"><label>Rüsten Laser min</label><input id="p_rl"></div>
+      <div class="fld"><label>Rüsten Biegen min</label><input id="p_rb"></div>
+      <div class="fld"><label>Handling s/Teil (Biegen)</label><input id="p_hand"></div>
+      <div class="fld"><label>Zeit je Biegung s</label><input id="p_tb"></div>
+      <div class="fld"><label>Laser-Overhead × (DXF)</label><input id="p_ovh"></div>
+    </div>
+    <button class="btn s" id="btnMaterial" style="width:100%;margin-top:14px">Materialpreise bearbeiten</button>
+    <div class="subnote" style="color:var(--gold);margin-top:16px">Standard: TruLaser 5030 = 134,17 €/h · Werte an eigene Maschinen anpassen</div>
+  </div>
+</aside>
 
 <script src="lib/pdf.min.js"></script>
 <script src="lib/three.min.js"></script>
