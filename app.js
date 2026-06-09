@@ -15,9 +15,9 @@ const PARAMS = {
   t_biege_s:20,        // s je Biegung
   laser_overhead:1.4   // Faktor Maschinenzeit/Beam-on (nur DXF-Schätzung)
 };
-const MATERIAL = {'1.4301':4.90,'1.4571':6.50,'1.4404':5.80,'S235':1.30,'S355':1.50,'S355MC':1.55,'S235MC':1.35,'DC01':1.40,'AlMg3':4.20,'RAEX':2.20,'Cu':10.00};
-const DENSITY = {'1.4':7900,'S2':7850,'S3':7850,'DC':7850,'RAEX':7850,'AlMg':2700,'Al':2700,'Cu':8900}; // kg/m³ je Präfix
-function density(m){ for(const k in DENSITY){ if(m&&m.startsWith(k)) return DENSITY[k]; } return 7850; }
+const MATERIAL = {'S235':1.30,'S355':1.50,'1.4301 V2A':4.90,'V4A':6.50,'AlMg3':4.20,'Hardox 500':2.40,'Hardox 600':2.80};
+const DENSITY = {'1.4':7900,'V2A':7900,'V4A':7900,'S2':7850,'S3':7850,'Hardox':7850,'AlMg':2700,'Al':2700}; // kg/m³ je Präfix
+function density(m){ for(const k in DENSITY){ if(m&&m.includes(k)) return DENSITY[k]; } return 7850; }
 
 // Schnittgeschwindigkeit mm/min (Richtwerte Faserlaser 6 kW, TruLaser 5030) je Werkstoffgruppe/Dicke
 // Richtwerte 6-kW-Faserlaser (mm/min), verankert am Plan: 2 mm Edelstahl ~19 m/min
@@ -26,7 +26,7 @@ const SPEED = {
   edelstahl: {t:[1,2,3,4,5,6,8,10,12,15,20],    v:[38000,19000,9500,5500,3800,2700,1500,950,650,400,250]},
   alu:       {t:[1,2,3,4,5,6,8,10,12,15],       v:[32000,16000,9000,5000,3500,2500,1300,800,500,320]},
 };
-function speedGroup(m){ if(!m) return 'stahl'; if(m.startsWith('1.4')) return 'edelstahl'; if(m.startsWith('Al')) return 'alu'; return 'stahl'; }
+function speedGroup(m){ if(!m) return 'stahl'; if(/1\.4|V2A|V4A/i.test(m)) return 'edelstahl'; if(/^Al|AlMg/i.test(m)) return 'alu'; return 'stahl'; }
 function speedFor(m,t){ const g=SPEED[speedGroup(m)],ts=g.t,vs=g.v; if(t<=ts[0])return vs[0]; if(t>=ts[ts.length-1])return vs[vs.length-1];
   for(let i=1;i<ts.length;i++){ if(t<=ts[i]){ const f=(t-ts[i-1])/(ts[i]-ts[i-1]); return vs[i-1]+f*(vs[i]-vs[i-1]); } } return vs[vs.length-1]; }
 // Einstechzeit (s) nach Dicke
@@ -41,16 +41,16 @@ const eur=x=>fmt(x)+' €';
 
 // Einstellungen (Materialpreise + Sätze) dauerhaft im Browser speichern
 function saveSettings(){ try{
-  localStorage.setItem('alz_material',JSON.stringify(MATERIAL));
-  localStorage.setItem('alz_params',JSON.stringify(PARAMS));
+  localStorage.setItem('alz_material_v2',JSON.stringify(MATERIAL));
+  localStorage.setItem('alz_params_v2',JSON.stringify(PARAMS));
 }catch(e){} }
 function loadSettings(){ try{
-  const m=JSON.parse(localStorage.getItem('alz_material')||'null');
+  const m=JSON.parse(localStorage.getItem('alz_material_v2')||'null');
   if(m&&typeof m==='object'&&Object.keys(m).length){ for(const k in MATERIAL) delete MATERIAL[k]; Object.assign(MATERIAL,m); }
-  const p=JSON.parse(localStorage.getItem('alz_params')||'null');
+  const p=JSON.parse(localStorage.getItem('alz_params_v2')||'null');
   if(p&&typeof p==='object') Object.assign(PARAMS,p);
 }catch(e){} }
-function resetSettings(){ try{ localStorage.removeItem('alz_material'); localStorage.removeItem('alz_params'); }catch(e){} location.reload(); }
+function resetSettings(){ try{ localStorage.removeItem('alz_material_v2'); localStorage.removeItem('alz_params_v2'); }catch(e){} location.reload(); }
 
 function matPrice(name){
   if(name in MATERIAL) return {p:MATERIAL[name],known:true};
@@ -181,7 +181,7 @@ function parseDxfGeom(text){
 async function loadDxf(text,name){
   const g=parseDxfGeom(text);
   if(!g){ toast('DXF konnte nicht gelesen werden: '+name); return; }
-  const p={ teilenr:name.replace(/\.dxf$/i,''), source:'dxf', quelle:name, material:'1.4301',
+  const p={ teilenr:name.replace(/\.dxf$/i,''), source:'dxf', quelle:name, material:'1.4301 V2A',
     dicke:2, menge:1, biegungen:0, gewicht:0, einstech:g.pierces, auftrag:'',
     area_m2:g.area_m2, cutlen_mm:g.cutlen_mm, bbox:g.bbox, dxf:g.draw, laser_min:0, _autoLaser:true };
   recomputeCad(p); PARTS.push(p);
@@ -246,14 +246,13 @@ function detectMaterialFromStep(text){
 }
 function normMaterial(raw){
   const s=(raw||'').toUpperCase();
-  if(/1\.4404|X2CRNIMO/.test(s)) return '1.4404';
-  if(/1\.4571|TI17-12/.test(s)) return '1.4571';
-  if(/1\.4301|X5CRNI18|V2A/.test(s)) return '1.4301';
+  if(/1\.4404|1\.4571|X2CRNIMO|X6CRNIMOTI|V4A/.test(s)) return 'V4A';
+  if(/1\.4301|X5CRNI18|V2A|1\.4\d{3}/.test(s)) return '1.4301 V2A';
+  if(/HARDOX ?600/.test(s)) return 'Hardox 600';
+  if(/HARDOX/.test(s)) return 'Hardox 500';
   if(/S355|1\.0577|ST52/.test(s)) return 'S355';
   if(/S235|1\.0038|ST37/.test(s)) return 'S235';
-  if(/DC01|1\.0330/.test(s)) return 'DC01';
   if(/ALMG|EN ?AW|ALUMIN/.test(s)) return 'AlMg3';
-  const e=s.match(/1\.4\d{3}/); if(e) return e[0];
   return raw.trim();
 }
 async function loadStep(buf,name){
@@ -262,7 +261,7 @@ async function loadStep(buf,name){
   try{
     const stepText=new TextDecoder('latin1').decode(new Uint8Array(buf));
     const matRaw=detectMaterialFromStep(stepText);
-    const material=matRaw?normMaterial(matRaw):'1.4301';
+    const material=matRaw?normMaterial(matRaw):'1.4301 V2A';
     const occt=await ensureOcct();
     const r=occt.ReadStepFile(new Uint8Array(buf),null);
     if(!r||!r.success||!r.meshes||!r.meshes.length){ toast('STEP ohne darstellbare Volumenkörper: '+name); return; }
