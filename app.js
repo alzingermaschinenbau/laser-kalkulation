@@ -285,6 +285,128 @@ function fitCircle(pts){
   const R=Math.sqrt(rr); let res=0; for(const p of pts) res+=Math.abs(Math.hypot(p[0]-cx,p[1]-cy)-R); res/=n;
   return {cx,cy,R,res};
 }
+// 2D-Best-Fit (Procrustes): Transform, die src-Punkte bestmöglich auf dst legt (inkl. Spiegelung). Robust.
+function procrustes2D(src, dst){
+  const n=src.length; if(n<2) return null;
+  let scx=0,scy=0,dcx=0,dcy=0; for(let i=0;i<n;i++){scx+=src[i][0];scy+=src[i][1];dcx+=dst[i][0];dcy+=dst[i][1];}
+  scx/=n;scy/=n;dcx/=n;dcy/=n;
+  const fit=flip=>{ let a=0,b=0; for(let i=0;i<n;i++){const fx=src[i][0]-scx,fy=(src[i][1]-scy)*(flip?-1:1),tx=dst[i][0]-dcx,ty=dst[i][1]-dcy; a+=fx*tx+fy*ty; b+=fx*ty-fy*tx;}
+    const ang=Math.atan2(b,a),cr=Math.cos(ang),sr=Math.sin(ang); let res=0;
+    for(let i=0;i<n;i++){const fx=src[i][0]-scx,fy=(src[i][1]-scy)*(flip?-1:1),rx=fx*cr-fy*sr,ry=fx*sr+fy*cr,tx=dst[i][0]-dcx,ty=dst[i][1]-dcy;res+=(rx-tx)*(rx-tx)+(ry-ty)*(ry-ty);}
+    return {flip,cr,sr,res}; };
+  const f0=fit(false),f1=fit(true),B=f1.res<f0.res?f1:f0;
+  return {fn:p=>{const fx=p[0]-scx,fy=(p[1]-scy)*(B.flip?-1:1);return [dcx+fx*B.cr-fy*B.sr, dcy+fx*B.sr+fy*B.cr];}, res:Math.sqrt(B.res/n)};
+}
+// Klassifiziert die B-Rep-Flächen (occt brep_faces) als eben (Schenkel) oder zylindrisch (Biegung/Lochwand).
+function classifyStepFaces(pos, idx, brepFaces, dicke){
+  const th=Math.max(1,dicke||1); const g=i=>[pos[i*3],pos[i*3+1],pos[i*3+2]];
+  const planes=[], cyls=[];
+  for(const bf of brepFaces){
+    const tris=[],norms=[],verts=[]; let area=0;
+    for(let t=bf.first;t<=bf.last;t++){ const a=g(idx[t*3]),b=g(idx[t*3+1]),c=g(idx[t*3+2]);
+      let nx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]),ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]),nz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+      const L=Math.hypot(nx,ny,nz);if(L<1e-9)continue; area+=0.5*L; norms.push([nx/L,ny/L,nz/L]); tris.push([a,b,c]); verts.push(a,b,c); }
+    if(!norms.length) continue;
+    let mx=0,my=0,mz=0;norms.forEach(n=>{mx+=n[0];my+=n[1];mz+=n[2];});const ml=Math.hypot(mx,my,mz)||1;mx/=ml;my/=ml;mz/=ml;
+    let maxdev=0;norms.forEach(n=>{const d=Math.acos(Math.max(-1,Math.min(1,n[0]*mx+n[1]*my+n[2]*mz)));if(d>maxdev)maxdev=d;});
+    if(maxdev<8*Math.PI/180){ let off=0;for(const v of verts)off+=v[0]*mx+v[1]*my+v[2]*mz;off/=verts.length;
+      planes.push({type:'plane',n:[mx,my,mz],off,area,tris,verts});
+    } else {
+      let ax=0,ay=0,az=0;
+      for(let i=1;i<norms.length;i++){const p=norms[i-1],q=norms[i];let cx=p[1]*q[2]-p[2]*q[1],cy=p[2]*q[0]-p[0]*q[2],cz=p[0]*q[1]-p[1]*q[0];
+        if(cx*ax+cy*ay+cz*az<0){cx=-cx;cy=-cy;cz=-cz;}ax+=cx;ay+=cy;az+=cz;}
+      const al=Math.hypot(ax,ay,az);if(al<1e-9)continue;ax/=al;ay/=al;az/=al;
+      let t1=Math.abs(ax)<0.9?[1,0,0]:[0,1,0];
+      let u=[t1[1]*az-t1[2]*ay,t1[2]*ax-t1[0]*az,t1[0]*ay-t1[1]*ax];const ul=Math.hypot(u[0],u[1],u[2])||1;u=[u[0]/ul,u[1]/ul,u[2]/ul];
+      let w=[ay*u[2]-az*u[1],az*u[0]-ax*u[2],ax*u[1]-ay*u[0]];
+      const pts2=verts.map(v=>[v[0]*u[0]+v[1]*u[1]+v[2]*u[2],v[0]*w[0]+v[1]*w[1]+v[2]*w[2]]);
+      const fc=fitCircle(pts2);
+      let amin=1e18,amax=-1e18;for(const v of verts){const d=v[0]*ax+v[1]*ay+v[2]*az;if(d<amin)amin=d;if(d>amax)amax=d;}
+      if(fc){ const ths=pts2.map(p=>Math.atan2(p[1]-fc.cy,p[0]-fc.cx)).sort((a,b)=>a-b);
+        let gap=0;for(let i=1;i<ths.length;i++){const d=ths[i]-ths[i-1];if(d>gap)gap=d;}const wrap=(ths[0]+2*Math.PI)-ths[ths.length-1];const span=2*Math.PI-Math.max(gap,wrap);
+        cyls.push({type:'cyl',axis:[ax,ay,az],R:fc.R,angle:span,axisLen:amax-amin,area,tris,verts,cu:fc.cx,cv:fc.cy,u,w}); }
+    }
+  }
+  const bends=cyls.filter(c=>c.axisLen>th*2 && c.R<th*25);   // echte Biegungen (keine Lochwände)
+  return {planes, cyls, bends};
+}
+// Allgemeine Blech-Abwicklung per Kanten-Vernähung: jede CAD-Fläche isometrisch in 2D abbilden
+// (Ebene projizieren, Biegung aufrollen) und entlang gemeinsamer Kanten flach aneinanderlegen.
+function unfoldSurface(pos, idx, brepFaces, dicke, blankArea){
+ try{
+  const th=Math.max(1,dicke||1); const g=i=>[pos[i*3],pos[i*3+1],pos[i*3+2]];
+  const Q=0.05, pk=P=>Math.round(P[0]/Q)+'_'+Math.round(P[1]/Q)+'_'+Math.round(P[2]/Q);  // Positions-Schlüssel
+  const faces=[];
+  for(let fi=0;fi<brepFaces.length;fi++){ const bf=brepFaces[fi];
+    const norms=[]; const P3=new Map(); const tris=[];
+    for(let t=bf.first;t<=bf.last;t++){ const a=g(idx[t*3]),b=g(idx[t*3+1]),c=g(idx[t*3+2]);
+      let nx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]),ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]),nz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+      const L=Math.hypot(nx,ny,nz);if(L<1e-9)continue; norms.push([nx/L,ny/L,nz/L]);
+      const ka=pk(a),kb=pk(b),kc=pk(c); P3.set(ka,a);P3.set(kb,b);P3.set(kc,c); tris.push([ka,kb,kc]); }
+    if(!tris.length) continue; const keys=[...P3.keys()];
+    let mx=0,my=0,mz=0;norms.forEach(n=>{mx+=n[0];my+=n[1];mz+=n[2];});const ml=Math.hypot(mx,my,mz)||1;mx/=ml;my/=ml;mz/=ml;
+    let dev=0;norms.forEach(n=>{const d=Math.acos(Math.max(-1,Math.min(1,n[0]*mx+n[1]*my+n[2]*mz)));if(d>dev)dev=d;});
+    const loc=new Map();
+    if(dev<8*Math.PI/180){ // EBENE
+      let t1=Math.abs(mx)<0.9?[1,0,0]:[0,1,0];
+      let u=[t1[1]*mz-t1[2]*my,t1[2]*mx-t1[0]*mz,t1[0]*my-t1[1]*mx];const ul=Math.hypot(u[0],u[1],u[2])||1;u=[u[0]/ul,u[1]/ul,u[2]/ul];
+      let w=[my*u[2]-mz*u[1],mz*u[0]-mx*u[2],mx*u[1]-my*u[0]];
+      let a=1e18,b=-1e18,c=1e18,d=-1e18;
+      for(const k of keys){const P=P3.get(k);const x=P[0]*u[0]+P[1]*u[1]+P[2]*u[2],y=P[0]*w[0]+P[1]*w[1]+P[2]*w[2];loc.set(k,[x,y]);if(x<a)a=x;if(x>b)b=x;if(y<c)c=y;if(y>d)d=y;}
+      faces.push({kind:'plane',tris,keys,loc,ext:Math.min(b-a,d-c),area:(b-a)*(d-c)});
+    } else { // ZYLINDER
+      let ax=0,ay=0,az=0;for(let i=1;i<norms.length;i++){const p=norms[i-1],q=norms[i];let cx=p[1]*q[2]-p[2]*q[1],cy=p[2]*q[0]-p[0]*q[2],cz=p[0]*q[1]-p[1]*q[0];if(cx*ax+cy*ay+cz*az<0){cx=-cx;cy=-cy;cz=-cz;}ax+=cx;ay+=cy;az+=cz;}
+      const al=Math.hypot(ax,ay,az);if(al<1e-9)continue;ax/=al;ay/=al;az/=al;
+      let t1=Math.abs(ax)<0.9?[1,0,0]:[0,1,0];
+      let u=[t1[1]*az-t1[2]*ay,t1[2]*ax-t1[0]*az,t1[0]*ay-t1[1]*ax];const ul=Math.hypot(u[0],u[1],u[2])||1;u=[u[0]/ul,u[1]/ul,u[2]/ul];
+      let w=[ay*u[2]-az*u[1],az*u[0]-ax*u[2],ax*u[1]-ay*u[0]];
+      const fc=fitCircle(keys.map(k=>{const P=P3.get(k);return [P[0]*u[0]+P[1]*u[1]+P[2]*u[2],P[0]*w[0]+P[1]*w[1]+P[2]*w[2]];})); if(!fc)continue;
+      const angs=keys.map(k=>{const P=P3.get(k);return Math.atan2(P[0]*w[0]+P[1]*w[1]+P[2]*w[2]-fc.cv,P[0]*u[0]+P[1]*u[1]+P[2]*u[2]-fc.cu);}).sort((a,b)=>a-b);
+      let gp=0,gat=angs[0];for(let i=1;i<angs.length;i++){const dd=angs[i]-angs[i-1];if(dd>gp){gp=dd;gat=angs[i];}}const wr=(angs[0]+2*Math.PI)-angs[angs.length-1];if(wr>gp)gat=angs[0];const a0=gat;
+      let amin=1e18,amax=-1e18;
+      for(const k of keys){const P=P3.get(k);const U=P[0]*u[0]+P[1]*u[1]+P[2]*u[2],W=P[0]*w[0]+P[1]*w[1]+P[2]*w[2];let an=Math.atan2(W-fc.cv,U-fc.cu)-a0;while(an<0)an+=2*Math.PI;while(an>=2*Math.PI)an-=2*Math.PI;const ad=P[0]*ax+P[1]*ay+P[2]*az;loc.set(k,[ad,fc.R*an]);if(ad<amin)amin=ad;if(ad>amax)amax=ad;}
+      faces.push({kind:'cyl',tris,keys,loc,ext:amax-amin,axLen:amax-amin,area:(amax-amin)*fc.R});
+    }
+  }
+  // Hautflächen: Schenkel (ebene, breit) + Biegungen (Zylinder, lang). Kantenbänder & Lochwände raus.
+  const skin=faces.filter(f=> f.kind==='plane'? f.ext>th*2.5 : f.axLen>th*2 );
+  if(skin.length<2) return null;
+  // Adjazenz über gemeinsame Kanten (positions-basiert)
+  const eMap=new Map();
+  skin.forEach((f,si)=>{ for(const tr of f.tris){ const E=[[tr[0],tr[1]],[tr[1],tr[2]],[tr[2],tr[0]]]; for(const [p,q] of E){const k=p<q?p+'|'+q:q+'|'+p; if(!eMap.has(k))eMap.set(k,new Set()); eMap.get(k).add(si);} } });
+  const adj=skin.map(()=>new Map());
+  for(const [k,set] of eMap){ if(set.size===2){const [i,j]=[...set]; const ix=k.indexOf('|'); adj[i].set(j,[k.slice(0,ix),k.slice(ix+1)]); adj[j].set(i,[k.slice(0,ix),k.slice(ix+1)]); } }
+  let root=0;for(let i=1;i<skin.length;i++)if(skin[i].area>skin[root].area)root=i;
+  // Baum-Abwicklung: G = posKey → 2D. Jedes Kind wird über die gemeinsame Kante GEGENÜBERLIEGEND angelegt
+  // (Kante umgekehrt: Fa→Gb, Fb→Ga) – starre Drehung ohne Spiegelung, konsistente Orientierung.
+  const G=new Map(); for(const k of skin[root].keys) G.set(k, skin[root].loc.get(k));
+  const placedSet=new Set([root]); const q=[root];
+  while(q.length){ const si=q.shift();
+    for(const [nj,ek] of adj[si]){ if(placedSet.has(nj))continue;
+      const a=ek[0],b=ek[1]; const Ga=G.get(a),Gb=G.get(b); if(!Ga||!Gb)continue;
+      const F=skin[nj]; const Fa=F.loc.get(a),Fb=F.loc.get(b); if(!Fa||!Fb)continue;
+      const vF=[Fb[0]-Fa[0],Fb[1]-Fa[1]], vG=[Ga[0]-Gb[0],Ga[1]-Gb[1]];
+      const ang=Math.atan2(vG[1],vG[0])-Math.atan2(vF[1],vF[0]); const cr=Math.cos(ang),sr=Math.sin(ang);
+      const T=p=>{const x=p[0]-Fa[0],y=p[1]-Fa[1];return [Gb[0]+x*cr-y*sr, Gb[1]+x*sr+y*cr];};
+      for(const k of F.keys){ if(!G.has(k)) G.set(k, T(F.loc.get(k))); }
+      placedSet.add(nj); q.push(nj);
+    }
+  }
+  const tris2=[];
+  skin.forEach((f,si)=>{ if(!placedSet.has(si))return;
+    for(const tr of f.tris){const A=G.get(tr[0]),B=G.get(tr[1]),C=G.get(tr[2]);if(A&&B&&C)tris2.push({a:{x:A[0],y:A[1]},b:{x:B[0],y:B[1]},c:{x:C[0],y:C[1]}});} });
+  const loops=loops2D(tris2); if(!loops.length) return null;
+  let mnx=1e18,mny=1e18,mxx=-1e18,mxy=-1e18;
+  loops.forEach(lp=>lp.forEach(p=>{if(p.x<mnx)mnx=p.x;if(p.y<mny)mny=p.y;if(p.x>mxx)mxx=p.x;if(p.y>mxy)mxy=p.y;}));
+  const w=mxx-mnx||1,h=mxy-mny||1;
+  // Prüfung über die echte gefüllte Metallfläche (Summe der Dreiecke), nicht die Bounding-Box (Netz!)
+  let netA=0; for(const t of tris2){ netA+=Math.abs((t.b.x-t.a.x)*(t.c.y-t.a.y)-(t.c.x-t.a.x)*(t.b.y-t.a.y))*0.5; }
+  if(blankArea>0){ const ratio=netA/blankArea; if(ratio<0.7||ratio>1.5) return null; }
+  loops.sort((a,b)=>shoelace(b)-shoelace(a));
+  let d='';loops.forEach(lp=>{lp.forEach((p,i)=>{d+=(i?'L':'M')+((p.x-mnx)/w).toFixed(4)+' '+((mxy-p.y)/h).toFixed(4)+' ';});d+='Z ';});
+  return {path:d,w,h,faces:placedSet.size,loops:loops.length};
+ }catch(e){ console.warn('unfoldSurface',e); return null; }
+}
 // Abwicklung eines um EINE Achse gebogenen/gerollten Teils (Profil, Rinne, Zylinderschale):
 // Außenhaut über den Querschnitt-Bogen aufrollen → (Länge, Bogenlänge) mit allen Ausschnitten.
 // Validierung gegen die echte Blechfläche; gibt null, wenn das Modell nicht passt.
@@ -768,10 +890,14 @@ async function loadStep(buf,name){
       cutlen_mm:cutlen, vol_m3:vol/1e9, area_m2:area/1e6, bbox:{minX,minY,minZ,maxX,maxY,maxZ,dims},
       step:meshes, laser_min:0, _autoLaser:true };
     const _sc=stepContourNorm(meshes,nrm); p.contourNorm=_sc.path; p.holes=_sc.holes;
-    // Abwicklung für die Tafel-Darstellung: erst Zylinder-/Roll-Abwicklung (volle Kontur + alle Ausschnitte,
-    // gegen die Blechfläche geprüft), sonst größte flache Fläche. Nur Darstellung; Preis bleibt das Rechteck.
+    // Abwicklung für die Tafel-Darstellung. Reihenfolge (jeweils gegen die Blechfläche geprüft):
+    // 1) echte Flächen-Abwicklung per Kanten-Vernähung (brep_faces) – mehrfach gekantete Teile, alle Ausschnitte
+    // 2) Zylinder-/Roll-Abwicklung – gerollte Teile  3) größte flache Fläche. Nur Darstellung; Preis = Rechteck.
     const _blankA = dicke>0 ? (vol/dicke) : 0;
-    const _fl = unrollCylindrical(meshes, dicke, _blankA) || dominantFaceFlat(meshes, nrm);
+    const _m0=r.meshes[0];
+    let _fl = unrollCylindrical(meshes, dicke, _blankA);   // gerollte Teile zuerst (zuverlässig)
+    if(!_fl){ try{ if(_m0&&_m0.brep_faces&&_m0.index) _fl=unfoldSurface(_m0.attributes.position.array,_m0.index.array,_m0.brep_faces,dicke,_blankA); }catch(e){ console.warn('unfold',e); } }
+    _fl = _fl || dominantFaceFlat(meshes, nrm);
     if(_fl && _fl.w>0 && _fl.h>0){ p._flatNorm=_fl.path; p._flatW=_fl.w; p._flatH=_fl.h; }
     recomputeCad(p); PARTS.push(p);
     toast(`STEP: ${p.teilenr} · ${fmt(dims[0],1)} mm · ${matRaw?('Werkstoff '+p.material):'kein Werkstoff in Datei → '+p.material}· ${bends} Biegung(en)`);

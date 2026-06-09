@@ -33,6 +33,14 @@ STEP- und DXF-Dateien sowie Biegeprogrammen (JUPIDU/HTML). Dateien: `index.html`
   nur das Hauptblech (Voll-Abwicklung verzweigter Teile nicht umgesetzt).
   **Hinweis:** STEP = nur 3D-Geometrie → Biegungszahl (`detectBends`) und Abwicklung sind **Schätzungen**;
   exakt nur via Biegeprogramm (JUPIDU/HTML) bzw. DXF-Zuschnitt.
+- **Echte Abwicklung aus STEP (B-Rep):** Der STEP-Import (`occt.ReadStepFile`) liefert `brep_faces`
+  (Dreieck→CAD-Fläche). Daraus echte Abwicklung — Reihenfolge in `loadStep`, jeweils gegen die Blechfläche
+  (Σ Dreiecke ≈ Vol/Dicke) geprüft, sonst verworfen: 1) `unrollCylindrical` (gerollte/zylindrische Teile,
+  Kreis-Fit), 2) `unfoldSurface` (allgemein: jede Fläche isometrisch in 2D – Ebene projizieren, Zylinder
+  aufrollen – und per Baum entlang **positions-basierter** gemeinsamer Kanten gegenüberliegend vernähen;
+  Vertices sind pro Fläche dupliziert, daher Positions-Schlüssel), 3) `dominantFaceFlat` (Hauptfläche).
+  Beispiele: 0011813_1 (gerollt) 1462×330 mm, 0012954_0 (7 Kanten) 634×391-Netz mit allen Ausschnitten.
+  Nur Darstellung (`p._flatNorm`); Schachtelung/Preis bleiben das Abwicklungs-Rechteck.
 - **Walzrichtung je Teil:** Pro Position wählbar (`p.walz`: `egal`/`laengs`/`quer`) – beliebig = freie Winkel,
   Walzrichtung = nur 0°, Gegen Walzrichtung = nur 90°. Steuert die erlaubten Drehwinkel beim Schachteln
   (`walzAngles` je Item). Auswahl + **Einzel-Löschen** (✕) sitzen in der Werkzeug-Leiste jeder Positionszeile.
