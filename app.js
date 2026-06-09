@@ -198,13 +198,13 @@ function computeNesting(){
     const key=p.material+' · '+fmt(p.dicke,2)+' mm';
     (groups[key]=groups[key]||{material:p.material,dicke:p.dicke,parts:[],items:[]});
     groups[key].parts.push(p);
-    const gap=Math.max(MIN_GAP, Math.round(p.dicke));
+    const gap=Math.max(1, Math.round(p.dicke));
     const menge=Math.max(1,parseInt(p.menge)||1);
     for(let k=0;k<menge;k++) groups[key].items.push({w:fp.w+gap, h:fp.h+gap, label:(i+1)+'', pi:i});
   });
   const out=[];
   for(const key in groups){
-    const g=groups[key]; const gap=Math.max(MIN_GAP, Math.round(g.dicke));
+    const g=groups[key]; const gap=Math.max(1, Math.round(g.dicke));
     const sheets=packSheets(g.items, SHEET_W, SHEET_H);
     const nSheets=sheets.length;
     const last=sheets[nSheets-1];
