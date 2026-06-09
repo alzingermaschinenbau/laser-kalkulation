@@ -620,8 +620,8 @@ function snapThickness(t){ const std=[0.5,0.75,1,1.25,1.5,2,2.5,3,4,5,6,8,10,12,
   if(!(t>0)||t>26) return +(+t||2).toFixed(1);
   let best=std[0],bd=1e9; for(const s of std){const d=Math.abs(s-t); if(d<bd){bd=d;best=s;}} return best; }
 // Biegungen aus STEP-Geometrie schätzen: Anzahl flacher Schenkel-Ausrichtungen − 1
-function detectBends(meshes){
-  const TOL=Math.cos(12*Math.PI/180); const clusters=[]; let total=0;
+function detectBends(meshes, dicke){
+  const TOL=Math.cos(15*Math.PI/180); const clusters=[]; let total=0;
   for(const m of meshes){ const pos=m.pos, idx=m.idx; if(!idx) continue;
     const g=i=>[pos[i*3],pos[i*3+1],pos[i*3+2]];
     for(let t=0;t<idx.length;t+=3){
@@ -636,13 +636,21 @@ function detectBends(meshes){
       let f=false;
       for(const cl of clusters){ if(cl.ax*nx+cl.ay*ny+cl.az*nz>TOL){
         const w=cl.area+area; cl.ax=(cl.ax*cl.area+nx*area)/w; cl.ay=(cl.ay*cl.area+ny*area)/w; cl.az=(cl.az*cl.area+nz*area)/w;
-        const ll=Math.hypot(cl.ax,cl.ay,cl.az)||1; cl.ax/=ll;cl.ay/=ll;cl.az/=ll; cl.area=w; f=true; break; } }
-      if(!f) clusters.push({ax:nx,ay:ny,az:nz,area});
+        const ll=Math.hypot(cl.ax,cl.ay,cl.az)||1; cl.ax/=ll;cl.ay/=ll;cl.az/=ll; cl.area=w; cl.V.push(a,b,c); f=true; break; } }
+      if(!f) clusters.push({ax:nx,ay:ny,az:nz,area,V:[a,b,c]});
     }
   }
   if(!clusters.length||total<=0) return 0;
-  const maxA=Math.max(...clusters.map(c=>c.area));
-  const flanges=clusters.filter(c=>c.area>0.12*maxA && c.area>0.03*total).length;
+  const maxA=Math.max(...clusters.map(c=>c.area)); const th=Math.max(1, dicke||1);
+  // echtes Blech (Schenkel) = nennenswerte Fläche UND beidseitig ausgedehnt (kein dünnes Kantenband/Biegeradius)
+  const isFlange=c=>{ if(c.area<=0.015*maxA) return false;
+    const n={x:c.ax,y:c.ay,z:c.az}, {u,v}=planeBasis(n);
+    let mnu=1e18,mxu=-1e18,mnv=1e18,mxv=-1e18;
+    for(const P of c.V){ const U=P[0]*u.x+P[1]*u.y+P[2]*u.z, W=P[0]*v.x+P[1]*v.y+P[2]*v.z;
+      if(U<mnu)mnu=U;if(U>mxu)mxu=U;if(W<mnv)mnv=W;if(W>mxv)mxv=W; }
+    return Math.min(mxu-mnu, mxv-mnv) > th*3;
+  };
+  const flanges=clusters.filter(isFlange).length;
   return Math.max(0, flanges-1);
 }
 // Werkstoff aus STEP-Text lesen (falls vorhanden) und auf bekannte Bezeichnung normieren
@@ -693,7 +701,7 @@ async function loadStep(buf,name){
     let thRaw=sheetThickness(meshes,nrm);
     if(!(thRaw>0) || thRaw>dims[2]*1.05) thRaw=Math.min(area>0?2*vol/area:dims[0], dims[0]); // Fallback
     const dicke = snapThickness(thRaw);
-    const bends=detectBends(meshes);
+    const bends=detectBends(meshes, dicke);
     // Schneidlänge aus Geometrie: Rand (Umfang × Dicke) = Oberfläche − 2·Blechfläche
     const blank = dicke>0 ? vol/dicke : 0;            // mm² Blechfläche (≈ V/t)
     let cutlen = dicke>0 ? (area - 2*blank)/dicke : 0; // mm Umfang inkl. Löcher
