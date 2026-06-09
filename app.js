@@ -143,19 +143,61 @@ function convexHull(pts){ if(pts.length<3) return pts.slice();
   for(const p of pts){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop(); lo.push(p); }
   for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; while(hi.length>=2&&cr(hi[hi.length-2],hi[hi.length-1],p)<=0)hi.pop(); hi.push(p); }
   lo.pop(); hi.pop(); return lo.concat(hi); }
-function stepContourNorm(meshes,bb){
-  const ext=[bb.maxX-bb.minX, bb.maxY-bb.minY, bb.maxZ-bb.minZ];
-  let ti=0; if(ext[1]<ext[ti])ti=1; if(ext[2]<ext[ti])ti=2;       // Dickenachse = kleinste
-  const ax=[0,1,2].filter(i=>i!==ti);
-  let total=0; meshes.forEach(m=>total+=m.pos.length/3);
+// dominante Flächennormale (größte Fläche) – für Dicke & Kontur
+function dominantNormal(meshes){
+  const cl=[];
+  for(const m of meshes){ const pos=m.pos, idx=m.idx; if(!idx) continue; const g=i=>[pos[i*3],pos[i*3+1],pos[i*3+2]];
+    for(let t=0;t<idx.length;t+=3){ const a=g(idx[t]),b=g(idx[t+1]),c=g(idx[t+2]);
+      let nx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]),ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]),nz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+      const L=Math.hypot(nx,ny,nz); if(L<1e-9)continue; const ar=0.5*L; let sx=nx/L,sy=ny/L,sz=nz/L;
+      if(sz<-1e-6||(Math.abs(sz)<=1e-6&&(sy<-1e-6||(Math.abs(sy)<=1e-6&&sx<0)))){sx=-sx;sy=-sy;sz=-sz;}
+      let f=false; for(const c2 of cl){ if(c2.ax*sx+c2.ay*sy+c2.az*sz>0.985){c2.area+=ar;f=true;break;} } if(!f)cl.push({ax:sx,ay:sy,az:sz,area:ar});
+    } }
+  if(!cl.length) return {x:0,y:0,z:1}; cl.sort((a,b)=>b.area-a.area); return {x:cl[0].ax,y:cl[0].ay,z:cl[0].az};
+}
+function sheetThickness(meshes,n){ let mn=1e18,mx=-1e18;
+  for(const m of meshes){ const pos=m.pos; for(let i=0;i<pos.length;i+=3){ const d=pos[i]*n.x+pos[i+1]*n.y+pos[i+2]*n.z; if(d<mn)mn=d; if(d>mx)mx=d; } }
+  return mx-mn; }
+function planeBasis(n){
+  const ax=Math.abs(n.x),ay=Math.abs(n.y),az=Math.abs(n.z);
+  let t=(ax<=ay&&ax<=az)?{x:1,y:0,z:0}:(ay<=az?{x:0,y:1,z:0}:{x:0,y:0,z:1});
+  const d=t.x*n.x+t.y*n.y+t.z*n.z; let ux=t.x-d*n.x,uy=t.y-d*n.y,uz=t.z-d*n.z; const ul=Math.hypot(ux,uy,uz)||1; ux/=ul;uy/=ul;uz/=ul;
+  return {u:{x:ux,y:uy,z:uz}, v:{x:n.y*uz-n.z*uy, y:n.z*ux-n.x*uz, z:n.x*uy-n.y*ux}};
+}
+// echte 2D-Kontur: Randkanten der Top-Fläche (Normale ~ +n) projizieren und zu Schleifen verketten
+function stepOutline(meshes,n){
+  const {u,v}=planeBasis(n); const edge=new Map(), P=new Map(); let mi=0;
+  for(const m of meshes){ const pos=m.pos, idx=m.idx; if(!idx){mi++;continue;} const g=i=>[pos[i*3],pos[i*3+1],pos[i*3+2]];
+    for(let t=0;t<idx.length;t+=3){ const ia=idx[t],ib=idx[t+1],ic=idx[t+2]; const a=g(ia),b=g(ib),c=g(ic);
+      let nx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]),ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]),nz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+      const L=Math.hypot(nx,ny,nz); if(L<1e-9)continue; if((nx*n.x+ny*n.y+nz*n.z)/L<0.985) continue;
+      const ks=k=>mi+':'+k; [[ia,a],[ib,b],[ic,c]].forEach(([vi,p])=>{ const kk=ks(vi); if(!P.has(kk)) P.set(kk,{x:p[0]*u.x+p[1]*u.y+p[2]*u.z, y:p[0]*v.x+p[1]*v.y+p[2]*v.z}); });
+      [[ia,ib],[ib,ic],[ic,ia]].forEach(([p,q])=>{ const k1=ks(p),k2=ks(q); const ek=k1<k2?k1+'|'+k2:k2+'|'+k1; edge.set(ek,(edge.get(ek)||0)+1); });
+    } mi++;
+  }
+  const adj=new Map();
+  for(const [ek,cnt] of edge){ if(cnt!==1) continue; const i=ek.indexOf('|'); const k1=ek.slice(0,i),k2=ek.slice(i+1);
+    if(!adj.has(k1))adj.set(k1,[]); if(!adj.has(k2))adj.set(k2,[]); adj.get(k1).push(k2); adj.get(k2).push(k1); }
+  const seen=new Set(), loops=[];
+  for(const start of adj.keys()){ if(seen.has(start)) continue; const loop=[]; let cur=start,prev=null,guard=0;
+    while(cur!==null && cur!==undefined && !seen.has(cur) && guard++<200000){ seen.add(cur); loop.push(P.get(cur)); const nb=adj.get(cur)||[]; let nx=nb.find(x=>x!==prev&&!seen.has(x)); prev=cur; cur=(nx===undefined)?null:nx; }
+    if(loop.length>=3) loops.push(loop);
+  }
+  if(!loops.length) return null;
+  let mnx=1e18,mny=1e18,mxx=-1e18,mxy=-1e18; loops.forEach(lp=>lp.forEach(p=>{if(p.x<mnx)mnx=p.x;if(p.y<mny)mny=p.y;if(p.x>mxx)mxx=p.x;if(p.y>mxy)mxy=p.y;}));
+  const w=mxx-mnx||1,h=mxy-mny||1; let d='';
+  loops.forEach(lp=>{ lp.forEach((p,i)=>{ d+=(i?'L':'M')+((p.x-mnx)/w).toFixed(4)+' '+((mxy-p.y)/h).toFixed(4)+' '; }); d+='Z '; });
+  return d;
+}
+function stepContourNorm(meshes,n){
+  try{ const o=stepOutline(meshes,n); if(o && o.length>20) return o; }catch(e){ console.warn('outline',e); }
+  const {u,v}=planeBasis(n); let total=0; meshes.forEach(m=>total+=m.pos.length/3);
   const step=Math.max(1,Math.floor(total/4000)); const pts=[]; let c=0;
-  for(const m of meshes){ const pos=m.pos; for(let i=0;i<pos.length;i+=3){ if(c++%step) continue; pts.push({x:pos[i+ax[0]], y:pos[i+ax[1]]}); } }
+  for(const m of meshes){ const pos=m.pos; for(let i=0;i<pos.length;i+=3){ if(c++%step) continue; pts.push({x:pos[i]*u.x+pos[i+1]*u.y+pos[i+2]*u.z, y:pos[i]*v.x+pos[i+1]*v.y+pos[i+2]*v.z}); } }
   if(pts.length<3) return '';
-  const hull=convexHull(pts);
-  let mnx=Infinity,mny=Infinity,mxx=-Infinity,mxy=-Infinity;
-  hull.forEach(p=>{ if(p.x<mnx)mnx=p.x; if(p.y<mny)mny=p.y; if(p.x>mxx)mxx=p.x; if(p.y>mxy)mxy=p.y; });
-  const w=mxx-mnx||1, h=mxy-mny||1;
-  let d=''; hull.forEach((p,i)=>{ d+=(i?'L':'M')+((p.x-mnx)/w).toFixed(4)+' '+((mxy-p.y)/h).toFixed(4)+' '; });
+  const hull=convexHull(pts); let mnx=1e18,mny=1e18,mxx=-1e18,mxy=-1e18;
+  hull.forEach(p=>{if(p.x<mnx)mnx=p.x;if(p.y<mny)mny=p.y;if(p.x>mxx)mxx=p.x;if(p.y>mxy)mxy=p.y;});
+  const w=mxx-mnx||1,h=mxy-mny||1; let d=''; hull.forEach((p,i)=>{ d+=(i?'L':'M')+((p.x-mnx)/w).toFixed(4)+' '+((mxy-p.y)/h).toFixed(4)+' '; });
   return d+'Z';
 }
 // Shelf-Packer (FFDH) mit Drehung – Rechtecke inkl. Abstand
@@ -404,9 +446,10 @@ async function loadStep(buf,name){
       return {pos:Float32Array.from(pos), idx:idx?Uint32Array.from(idx):null, color:m.color};
     });
     const dims=[maxX-minX,maxY-minY,maxZ-minZ].sort((a,b)=>a-b);
-    // Blechdicke = 2·V/A (dünnwandig), gedeckelt auf kleinste Bauteilabmessung, auf Standarddicke gerundet
-    let thRaw = area>0 ? 2*vol/area : dims[0];
-    if(thRaw>dims[0]) thRaw=dims[0];
+    // Blechdicke aus Projektion auf die Hauptflächen-Normale (robust auch bei stark konturierten Teilen)
+    const nrm=dominantNormal(meshes);
+    let thRaw=sheetThickness(meshes,nrm);
+    if(!(thRaw>0) || thRaw>dims[2]*1.05) thRaw=Math.min(area>0?2*vol/area:dims[0], dims[0]); // Fallback
     const dicke = snapThickness(thRaw);
     const bends=detectBends(meshes);
     // Schneidlänge aus Geometrie: Rand (Umfang × Dicke) = Oberfläche − 2·Blechfläche
@@ -416,7 +459,7 @@ async function loadStep(buf,name){
     const p={ teilenr:name.replace(/\.(stp|step)$/i,''), source:'step', quelle:name, material,
       dicke, menge:1, biegungen:bends, _autoBends:true, gewicht:0, einstech:1, auftrag:'',
       cutlen_mm:cutlen, vol_m3:vol/1e9, area_m2:area/1e6, bbox:{minX,minY,minZ,maxX,maxY,maxZ,dims},
-      contourNorm:stepContourNorm(meshes,{minX,minY,minZ,maxX,maxY,maxZ}),
+      contourNorm:stepContourNorm(meshes,nrm),
       step:meshes, laser_min:0, _autoLaser:true };
     recomputeCad(p); PARTS.push(p);
     toast(`STEP: ${p.teilenr} · ${fmt(dims[0],1)} mm · ${matRaw?('Werkstoff '+p.material):'kein Werkstoff in Datei → '+p.material}· ${bends} Biegung(en)`);
@@ -550,7 +593,7 @@ function renderNesting(){
         const pw=Math.max(1,r.w-g.gap), ph=Math.max(1,r.h-g.gap);   // Teilegröße ohne Abstand
         const X=r.x*sx, Y=r.y*sy, Wp=pw*sx, Hp=ph*sy;
         if(pp && pp.contourNorm && !r.rot){
-          rects+=`<path d="${pp.contourNorm}" transform="translate(${X.toFixed(1)},${Y.toFixed(1)}) scale(${Wp.toFixed(2)},${Hp.toFixed(2)})" fill="${col}" fill-opacity="0.20" stroke="${col}" stroke-width="0.9" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+          rects+=`<path d="${pp.contourNorm}" transform="translate(${X.toFixed(1)},${Y.toFixed(1)}) scale(${Wp.toFixed(2)},${Hp.toFixed(2)})" fill="${col}" fill-opacity="0.20" fill-rule="evenodd" stroke="${col}" stroke-width="0.9" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
         } else {
           rects+=`<rect x="${X.toFixed(1)}" y="${Y.toFixed(1)}" width="${Math.max(1,Wp-0.6).toFixed(1)}" height="${Math.max(1,Hp-0.6).toFixed(1)}" fill="${col}" fill-opacity="0.20" stroke="${col}" stroke-width="0.7"/>`;
         }
