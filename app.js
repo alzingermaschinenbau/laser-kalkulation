@@ -39,19 +39,21 @@ const SPEED = {
               v:[24000,13500,8500,5500,4000,3000,1800,1100,700,420]},
 };
 // Effektive Schnittgeschwindigkeit zwischen KLEIN- und GROSSKONTUR, je nach mittlerem Konturumfang des
-// Teils (Schnittlänge ÷ Konturen). TruTops-Klassen (aus dem Regelwerk): Klein ≲120 mm, Gross ≳600 mm.
-// Konkave Interpolation (geometrisch) – kleine Konturen sind beschleunigungslimitiert, große erreichen
-// das volle Tempo. Beispiel 1 mm: kleine Löcher 4,5 m/min, mittlere ~11, große Außenkontur 51 m/min.
+// Teils (Schnittlänge ÷ Konturen). Echte TruTops-Werte (Konturart Klein/Mittel/Gross):
+//  - Dünn N2 (1–5 mm): Klein konstant 4,5 m/min, sanfte Kurve bis Gross (klein ≲120 mm, gross ≳600 mm).
+//  - Dick O2 (≥6 mm): Mittel = Gross (mittlere Konturen schon voll), Klein kriecht mit 0,1 m/min
+//    (Sauerstoff kann winzige Löcher in dickem Blech kaum) → fast Stufe: <120 mm 0,1, ab ~130 mm voll.
+// Konkave (geometrische) Interpolation; Konturgröße zusätzlich auf die Teilgröße gedeckelt.
 function partMaxDim(p){                                  // größte Teilabmessung in der Ebene (mm)
   const b=p.bbox; if(!b) return 1e9;
   if(b.dims) return b.dims[b.dims.length-1]||1e9;        // STEP: längste Kante
   return Math.max(b.w||0, b.h||0)||1e9;                  // DXF
 }
-function konturSpeed(p, vGross, vKlein){
+function konturSpeed(p, vGross, vKlein, grossSize){
   const n=Math.max(1, p.einstech||1);
   const avg=(p.cutlen_mm||0)/n;                          // mittlerer Konturumfang (mm)
   const size=Math.min(avg, partMaxDim(p));              // auf Teilgröße deckeln: kurze Geraden → nie Topspeed
-  const f=Math.min(1, Math.max(0, (size-120)/(600-120))); // 0 = Klein (≤120 mm) … 1 = Gross (≥600 mm)
+  const f=Math.min(1, Math.max(0, (size-120)/(grossSize-120))); // 0 = Klein (≤120 mm) … 1 = Gross
   return vKlein*Math.pow(Math.max(vGross,vKlein)/vKlein, f);
 }
 function speedGroup(m){ if(!m) return 'stahl'; if(/1\.4|V2A|V4A/i.test(m)) return 'edelstahl'; if(/^Al|AlMg/i.test(m)) return 'alu'; return 'stahl'; }
@@ -132,9 +134,12 @@ function effCutSpeed(p){
   const g=SPEED[speedGroup(p.material)], t=p.dicke||1;
   const vGross=speedFor(p.material,t);
   if(g.gross && t<=(g.maxT||0)){
-    // Klein: dünn (≤5 mm N2) echte 4,5 m/min, dick (O2) ~0,6×Gross; nie schneller als Gross
-    const vKlein=Math.min(vGross, t<=5 ? (g.klein||4500) : vGross*0.6);
-    return Math.max(150, konturSpeed(p, vGross, vKlein));
+    // Dünn N2 (≤5 mm): Klein 4,5 m/min, sanfte Kurve bis Gross bei ~600 mm.
+    // Dick O2 (≥6 mm): Klein 0,1 m/min (Kriechen), aber Mittel = Gross → ab ~130 mm voll (fast Stufe).
+    const thin=t<=5;
+    const vKlein=Math.min(vGross, thin ? (g.klein||4500) : 100);
+    const grossSize=thin ? 600 : 130;
+    return Math.max(100, konturSpeed(p, vGross, vKlein, grossSize));
   }
   return Math.max(150,vGross);
 }
