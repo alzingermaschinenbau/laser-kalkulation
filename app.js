@@ -651,13 +651,46 @@ function computeNesting(){
 }
 
 // ---------- Datei-Routing ----------
+// DXF enthält kein Material/keine Dicke → einmal pro Import nachfragen (gilt für alle DXFs des Imports)
+function askDxfMeta(count){
+  return new Promise(res=>{
+    let lastMat='1.4301 V2A', lastDicke=2;
+    try{ lastMat=localStorage.getItem('alz_dxf_mat')||lastMat; lastDicke=numDe(localStorage.getItem('alz_dxf_dicke')||'2')||2; }catch(e){}
+    const opts=Object.keys(MATERIAL).sort().map(k=>`<option${k===lastMat?' selected':''}>${k}</option>`).join('')
+      +(lastMat in MATERIAL?'':`<option selected>${lastMat}</option>`);
+    const m=document.createElement('div'); m.className='modal';
+    m.innerHTML=`<div class="modal-card" style="max-width:420px">
+      <div class="modal-h"><h3>DXF-Import · Material &amp; Dicke</h3></div>
+      <div class="modal-b">
+        <p style="font-size:13px;color:var(--muted);margin:0 0 14px">DXF-Dateien enthalten kein Material und keine Blechdicke.
+        Bitte für ${count===1?'diese Datei':'diese <b>'+count+' Dateien</b>'} festlegen (später je Position änderbar):</p>
+        <div style="display:grid;grid-template-columns:1fr 110px;gap:10px">
+          <div class="fld"><label style="display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Material</label>
+            <select id="dxfMat" style="width:100%;padding:9px;border:1px solid var(--line-strong);border-radius:7px;background:var(--field)">${opts}</select></div>
+          <div class="fld"><label style="display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Dicke mm</label>
+            <input id="dxfDicke" value="${fmt(lastDicke,2)}" style="width:100%;padding:9px;border:1px solid var(--line-strong);border-radius:7px;background:var(--field);font-family:var(--mono)"></div>
+        </div>
+      </div>
+      <div class="modal-f"><button class="btn p" data-ok style="width:100%">Übernehmen</button></div></div>`;
+    document.body.appendChild(m);
+    const done=()=>{ const material=m.querySelector('#dxfMat').value;
+      const dicke=Math.max(0.1, numDe(m.querySelector('#dxfDicke').value)||2);
+      try{ localStorage.setItem('alz_dxf_mat',material); localStorage.setItem('alz_dxf_dicke',String(dicke)); }catch(e){}
+      m.remove(); res({material,dicke}); };
+    m.querySelector('[data-ok]').onclick=done;
+    m.querySelector('#dxfDicke').addEventListener('keydown',e=>{ if(e.key==='Enter') done(); });
+    m.querySelector('#dxfDicke').focus();
+  });
+}
 async function handleFiles(list){
   const files=[...list]; if(!files.length) return;
+  const nDxf=files.filter(f=>(f.name.split('.').pop()||'').toLowerCase()==='dxf').length;
+  const dxfMeta = nDxf>0 ? await askDxfMeta(nDxf) : null;
   for(const f of files){
     const ext=(f.name.split('.').pop()||'').toLowerCase();
     try{
       if(ext==='pdf') await loadPlan(await f.arrayBuffer(), f.name);
-      else if(ext==='dxf') await loadDxf(await f.text(), f.name);
+      else if(ext==='dxf') await loadDxf(await f.text(), f.name, dxfMeta);
       else if(ext==='stp'||ext==='step') await loadStep(await f.arrayBuffer(), f.name);
       else if(ext==='jupidu'){ const b=await parseBendJupidu(await f.arrayBuffer(), f.name); if(b) PENDING_BENDS.push(b); }
       else if(ext==='html'||ext==='htm'){ const b=parseBendHtml(await f.text(), f.name); if(b) PENDING_BENDS.push(b); }
@@ -853,11 +886,12 @@ function recomputeDxfPart(p){
   p.contourNorm=dc.path; p.holes=dc.holes;
   recomputeCad(p);
 }
-async function loadDxf(text,name){
+async function loadDxf(text,name,meta){
   const g=parseDxfGeom(text);
   if(!g){ toast('DXF konnte nicht gelesen werden: '+name); return; }
-  const p={ teilenr:name.replace(/\.dxf$/i,''), source:'dxf', quelle:name, material:'1.4301 V2A',
-    dicke:2, menge:1, biegungen:0, gewicht:0, einstech:1, auftrag:'',
+  const p={ teilenr:name.replace(/\.dxf$/i,''), source:'dxf', quelle:name,
+    material:(meta&&meta.material)||'1.4301 V2A',
+    dicke:(meta&&meta.dicke)||2, menge:1, biegungen:0, gewicht:0, einstech:1, auftrag:'',
     area_m2:0, cutlen_mm:0, marklen_mm:0, bbox:g.bbox, dxf:g.draw, laser_min:0, _autoLaser:true };
   recomputeDxfPart(p); PARTS.push(p);
   toast(`DXF übernommen: ${p.teilenr} · ${fmt(g.bbox.w,0)}×${fmt(g.bbox.h,0)} mm${p.marklen_mm>0?' · '+fmt(p.marklen_mm,0)+' mm Gravur':''}`);

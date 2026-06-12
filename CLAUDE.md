@@ -65,6 +65,9 @@ STEP- und DXF-Dateien sowie Biegeprogrammen (JUPIDU/HTML). Dateien: `index.html`
 - **Segmente verketten:** Lose Linien/Bögen/Splines werden an den Endpunkten (Toleranz 0,05 mm) zu
   geschlossenen Konturen verkettet — erst dadurch stimmen Fläche (statt Bounding-Box), Einstiche,
   Loch-Erkennung und die Füllung beim Schachteln. Bögen/Ellipsen werden dafür als Punktketten abgetastet.
+- **Material/Dicke-Dialog beim Import:** DXF enthält kein Material und keine Dicke → `askDxfMeta` fragt
+  **einmal pro Import** (gilt für alle DXFs des Drops) Material + Dicke ab; zuletzt gewählte Werte werden
+  vorbelegt (`localStorage: alz_dxf_mat/alz_dxf_dicke`). Je Position bleibt beides änderbar.
 - **Bearbeitung je Kontur (wie TruTops Boost):** Jedes `p.dxf`-Element hat `kind`: `cut`/`mark`/`skip`.
   Default: geschlossene Konturen = Schneiden, Layer-`H`-Linien (Solid Edge Biege-/Markierlinien) = Gravur.
   Im DXF-Viewer („Ansehen") ist **jede Kontur klickbar** und schaltet Schneiden→Gravieren→Ignorieren
