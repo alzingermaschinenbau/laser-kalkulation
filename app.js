@@ -43,6 +43,8 @@ const $=s=>document.querySelector(s);
 const numDe=s=>{s=String(s).trim().replace(/\./g,'').replace(',','.');const v=parseFloat(s);return isNaN(v)?0:v;};
 const fmt=(x,d=2)=>Number(x).toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
 const eur=x=>fmt(x)+' €';
+// Zeit lesbar: unter 1 min in Sekunden, darüber "X min Y s"
+const fmtZeit=sec=>{ const s=Math.round(sec); if(s<60) return s+' s'; const m=Math.floor(s/60), r=s%60; return r? m+' min '+r+' s' : m+' min'; };
 
 // Einstellungen (Materialpreise + Sätze) dauerhaft im Browser speichern
 function saveSettings(){ try{
@@ -107,23 +109,23 @@ function estimateLaserMin(p){
 }
 // Zusammensetzung der Laserzeit als Text (für die Kostenaufschlüsselung)
 function laserTimeDetail(p){
-  if(p.source==='pdf') return `Laserzeit <b>${fmt(p.laser_min,2)} min/St</b> – exakt aus TruTops-Plan`;
-  if(!p._autoLaser)    return `Laserzeit <b>${fmt(p.laser_min,2)} min/St</b> – manuell gesetzt`;
+  if(p.source==='pdf') return `Laserzeit <b>${fmtZeit(p.laser_min*60)}/St</b> – exakt aus TruTops-Plan`;
+  if(!p._autoLaser)    return `Laserzeit <b>${fmtZeit(p.laser_min*60)}/St</b> – manuell gesetzt`;
   const ov=PARAMS.laser_overhead, v=speedFor(p.material,p.dicke||1);
-  const cut=(p.cutlen_mm||0)/Math.max(150,v)*ov;
-  const grav=(p.marklen_mm||0)/markSpeed()*ov;
-  const pi=(p.einstech||0)*pierceTime(p.dicke||1)/60*ov;
-  const rap=((p.cutlen_mm||0)/Math.max(150,v)+(p.marklen_mm||0)/markSpeed())*0.10*ov;
-  let s=`Laserzeit <b>${fmt(p.laser_min,2)} min/St</b> = Schneiden ${fmt(cut,2)} (${fmt(p.cutlen_mm,0)} mm @ ${fmt(v/1000,1)} m/min)`;
-  if((p.marklen_mm||0)>0) s+=` + Gravur ${fmt(grav,2)} (${fmt(p.marklen_mm,0)} mm @ ${fmt(markSpeed()/1000,0)} m/min)`;
-  s+=` + Einstiche ${fmt(pi,2)} (${p.einstech}×) + Eilgang ${fmt(rap,2)} · inkl. Overhead ×${fmt(ov,1)}`;
+  const cut=(p.cutlen_mm||0)/Math.max(150,v)*ov*60;
+  const grav=(p.marklen_mm||0)/markSpeed()*ov*60;
+  const pi=(p.einstech||0)*pierceTime(p.dicke||1)*ov;
+  const rap=((p.cutlen_mm||0)/Math.max(150,v)+(p.marklen_mm||0)/markSpeed())*0.10*ov*60;
+  let s=`Laserzeit <b>${fmtZeit(p.laser_min*60)}/St</b> = Schneiden ${fmtZeit(cut)} (${fmt(p.cutlen_mm,0)} mm @ ${fmt(v/1000,1)} m/min)`;
+  if((p.marklen_mm||0)>0) s+=` + Gravur ${fmtZeit(grav)} (${fmt(p.marklen_mm,0)} mm @ ${fmt(markSpeed()/1000,0)} m/min)`;
+  s+=` + Einstiche ${fmtZeit(pi)} (${p.einstech}×) + Eilgang ${fmtZeit(rap)} · inkl. Overhead ×${fmt(ov,1)}`;
   return s;
 }
 // Zusammensetzung der Biegezeit als Text
 function bendTimeDetail(c){
   if(!(c.biege_s>0)) return 'keine Biegungen';
   const bends=Math.max(0,Math.round((c.biege_s-PARAMS.handling_s)/PARAMS.t_biege_s));
-  return `Biegezeit <b>${fmt(c.biege_s,0)} s/St</b> = Handling ${fmt(PARAMS.handling_s,0)} s + ${bends} × ${fmt(PARAMS.t_biege_s,0)} s je Biegung`;
+  return `Biegezeit <b>${fmtZeit(c.biege_s)}/St</b> = Handling ${fmt(PARAMS.handling_s,0)} s + ${bends} × ${fmt(PARAMS.t_biege_s,0)} s je Biegung`;
 }
 // CAD-Teile: Gewicht (und ggf. Laserzeit) aus Geometrie neu berechnen
 function recomputeCad(p){
@@ -1130,9 +1132,9 @@ function renderPositions(){
     const c=calc(p);
     const matOpts=Object.keys(MATERIAL).sort().map(m=>`<option ${m===p.material?'selected':''}>${m}</option>`).join('')+(p.material in MATERIAL?'':`<option selected>${p.material}</option>`);
     const badge=`<span class="srcbadge ${p.source}">${p.source}</span>`;
-    const sub = p.source==='step' ? `${fmt(p.gewicht,2)} kg · ${fmt(p.cutlen_mm||0,0)} mm · ${fmt(p.laser_min,2)} min · 3D`
-      : p.source==='dxf' ? `${fmt(p.gewicht,2)} kg · ${fmt(p.cutlen_mm,0)} mm${p.marklen_mm>0?' + '+fmt(p.marklen_mm,0)+' mm Gravur':''} · ${fmt(p.laser_min,2)} min`
-      : `${fmt(p.gewicht,2)} kg · ${fmt(p.laser_min,2)} min${p.auftrag?' · '+p.auftrag:''}`;
+    const sub = p.source==='step' ? `${fmt(p.gewicht,2)} kg · ${fmt(p.cutlen_mm||0,0)} mm · ${fmtZeit(p.laser_min*60)} · 3D`
+      : p.source==='dxf' ? `${fmt(p.gewicht,2)} kg · ${fmt(p.cutlen_mm,0)} mm${p.marklen_mm>0?' + '+fmt(p.marklen_mm,0)+' mm Gravur':''} · ${fmtZeit(p.laser_min*60)}`
+      : `${fmt(p.gewicht,2)} kg · ${fmtZeit(p.laser_min*60)}${p.auftrag?' · '+p.auftrag:''}`;
     const viewBtn = (p.source==='step'||p.source==='dxf') ? `<button class="vbtn" data-view="${i}">👁 Ansehen</button>` : '';
     const w=p.walz||'egal';
     const walzSel = (p.source==='step'||p.source==='dxf') ? `<select class="walzsel" data-i="${i}" data-k="walz" title="Lage zur Walzrichtung beim Schachteln">
@@ -1159,8 +1161,8 @@ function renderPositions(){
       <div class="cs-item"><span class="k">Material</span><span class="v">${eur(c.matk)}</span></div>
       <div class="cs-item"><span class="k">Programmieren</span><span class="v">${eur(c.progk)}</span></div>
       <div class="cs-item"><span class="k">Rüsten</span><span class="v">${eur(c.ruestk)}</span></div>
-      <div class="cs-item"><span class="k">Lasern</span><span class="v">${eur(c.laserk)}</span><span class="tm">${fmt(p.laser_min,2)} min/St</span></div>
-      <div class="cs-item"><span class="k">Biegen</span><span class="v">${eur(c.biegek)}</span><span class="tm">${c.biege_s>0?(c.biege_s>=90?fmt(c.biege_s/60,1)+' min/St':fmt(c.biege_s,0)+' s/St'):'—'}</span></div>
+      <div class="cs-item"><span class="k">Lasern</span><span class="v">${eur(c.laserk)}</span><span class="tm">${fmtZeit(p.laser_min*60)}/St</span></div>
+      <div class="cs-item"><span class="k">Biegen</span><span class="v">${eur(c.biegek)}</span><span class="tm">${c.biege_s>0?fmtZeit(c.biege_s)+'/St':'—'}</span></div>
       <div class="cs-sep"></div>
       <div class="cs-item dim"><span class="k">Selbstkosten/St</span><span class="v">${eur(c.selbstk)}</span></div>
       <div class="cs-item dim"><span class="k">VK/St +${fmt(PARAMS.marge,0)}%</span><span class="v">${eur(c.vk)}</span></div>
@@ -1446,7 +1448,7 @@ function openAngebot(){
   const datum=g('d_datum')||new Date().toLocaleDateString('de-DE');
   const verk=[g('d_verk'),g('d_tel'),g('d_mail')].filter(Boolean).join(' · ');
   const opts=PARTS.map((p,i)=>{const c=calc(p);
-    return `<div class="opt"><div class="on"><b>${i+1}. ${p.teilenr}</b><small>${p.material} · ${fmt(p.dicke,1)} mm · ${c.menge}× · ${eur(c.vk)}/St.</small></div><div class="op">${eur(c.position)}</div></div>`;}).join('');
+    return `<div class="opt"><div class="othumb">${thumbHtml(p)}</div><div class="on"><b>${i+1}. ${p.teilenr}</b><small>${p.material} · ${fmt(p.dicke,1)} mm · ${c.menge}× · ${eur(c.vk)}/St.</small></div><div class="op">${eur(c.position)}</div></div>`;}).join('');
   const metaSrc = PLANNAME?('Plan '+PLANNAME.replace(/\.pdf$/i,'')):(PARTS.length+' CAD-Teile');
   const w=document.createElement('div'); w.id='angebot';
   w.innerHTML=`
@@ -1465,9 +1467,8 @@ function openAngebot(){
      <div class="optgroup"><div class="ogh">Positionen</div>${opts}</div>
      <div class="sums"><div class="srow"><span>Zwischensumme netto</span><span style="font-family:var(--mono)">${eur(sumPositions())}</span></div>${total>sumPositions()+0.005?`<div class="srow"><span>Mindermengenzuschlag (Mindestauftrag ${eur(PARAMS.min_pos)})</span><span style="font-family:var(--mono)">${eur(total-sumPositions())}</span></div>`:''}<div class="srow tot"><span>Gesamtpreis netto</span><span class="v">${eur(total)}</span></div></div>
      <div class="terms">
-       <div><h4>Gewährleistung</h4><p>1 Jahr ab Auslieferung, nicht auf Verschleißteile.</p></div>
        <div><h4>Lieferbedingungen</h4><p>FCA Schierling Germany (Incoterms 2010).</p></div>
-       <div><h4>Zahlungsbedingungen</h4><p>30 % Anzahlung bei Auftragserteilung, Restbetrag bei Versandbereitschaft.</p></div>
+       <div><h4>Zahlungsbedingungen</h4><p>Zahlbar innerhalb von 7 Tagen netto.</p></div>
        <div><h4>Lieferzeit</h4><p>Nach Vereinbarung.</p></div>
      </div>
      <div class="fine">Dieses Angebot ist freibleibend und unverbindlich, 30 Tage gültig. Alle Preise in Euro, netto zzgl. gesetzlicher Mehrwertsteuer. Es gelten die AGB der Alzinger Maschinenbau GmbH. Sätze: Laser ${fmt(PARAMS.laser_satz,2)} €/h · Abkanten ${fmt(PARAMS.abkant_satz,2)} €/h · Marge ${fmt(PARAMS.marge,0)} %.</div>
