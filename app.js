@@ -1504,8 +1504,8 @@ function openAngebot(){
    <div class="ang">
      <div class="head">
        <div style="display:flex;gap:13px;align-items:center">
-         <img src="logo.png" style="height:48px;width:auto" alt="Alzinger Maschinenbau">
-         <div class="co"><b>Alzinger Maschinenbau GmbH</b><small>Am Gewerbring 14 · 84069 Schierling${verk?'<br>Verkäufer: '+verk:''}</small></div>
+         <img src="logo.png" style="height:40px;width:auto" alt="Alzinger Maschinenbau">
+         ${verk?`<div class="co"><small>Verkäufer: ${verk}</small></div>`:''}
        </div>
        <div class="meta">${nr&&nr!=='Angebot'?'Angebot<br><b>'+nr+'</b>':'<b>Angebot</b>'}<br>${datum}${g('d_ort')?' · '+g('d_ort'):''}</div>
      </div>
